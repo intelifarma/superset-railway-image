@@ -25,8 +25,9 @@ ENV SUPERSET_CONFIG_PATH=/app/docker/superset_config.py
 
 EXPOSE 8088
 
-# Install psycopg2 inside the virtual environment
-RUN /app/.venv/bin/pip install psycopg2-binary
+# Install PostgreSQL driver
+RUN pip install psycopg2-binary && \
+    python -c "import psycopg2; print('psycopg2 OK')"
 
 # Copy files
 COPY startup.sh ./startup.sh
