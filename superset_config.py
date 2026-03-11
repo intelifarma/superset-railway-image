@@ -29,6 +29,31 @@ SUPERSET_WEBSERVER_PORT = int(os.environ.get("SUPERSET_PORT", "8088"))
 WTF_CSRF_ENABLED = False
 TALISMAN_ENABLED = False
 
+# --- Embedded Superset & Guest Tokens ---
 FEATURE_FLAGS = {
     "EMBEDDED_SUPERSET": True,
+    "ENABLE_TEMPLATE_PROCESSING": True,
 }
+
+# CORS — allow TradeAudit to embed dashboards
+ENABLE_CORS = True
+CORS_OPTIONS = {
+    "supports_credentials": True,
+    "allow_headers": ["*"],
+    "resources": ["*"],
+    "origins": os.environ.get("CORS_ORIGINS", "*").split(","),
+}
+
+# Guest token config
+GUEST_ROLE_NAME = "Public"
+GUEST_TOKEN_JWT_SECRET = os.environ.get("SUPERSET_SECRET_KEY", "CHANGE_ME")
+GUEST_TOKEN_JWT_ALGO = "HS256"
+GUEST_TOKEN_HEADER_NAME = "X-GuestToken"
+GUEST_TOKEN_JWT_EXP_SECONDS = 600
+
+# Allow embedding in iframes
+HTTP_HEADERS = {
+    "X-Frame-Options": "ALLOWALL",
+}
+SESSION_COOKIE_SAMESITE = "None"
+SESSION_COOKIE_SECURE = True
