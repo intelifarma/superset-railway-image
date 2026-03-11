@@ -25,8 +25,8 @@ ENV SUPERSET_CONFIG_PATH=/app/docker/superset_config.py
 
 EXPOSE 8088
 
-# Find and use the correct pip to install PostgreSQL driver
-RUN which pip || which pip3 || find / -name "pip*" -type f 2>/dev/null | head -5
+# Install PostgreSQL driver into the venv that Superset uses at runtime
+RUN /app/.venv/bin/python -m pip install psycopg2-binary
 
 # Copy files
 COPY startup.sh ./startup.sh
