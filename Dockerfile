@@ -11,22 +11,23 @@ ARG REDIS_URL
 ARG SUPERSET_SECRET_KEY
 ARG SUPERSET_PORT=8088
 
-ENV PYTHONPATH=\"/app/pythonpath:/app/docker/pythonpath_prod\"
-ENV REDIS_HOST=\"${REDISHOST}\"
+ENV PYTHONPATH="/app/pythonpath:/app/docker/pythonpath_prod"
+ENV REDIS_HOST="${REDISHOST}"
 ENV REDIS_PORT=${REDISPORT}
-ENV REDIS_URL=\"${REDIS_URL}\"
+ENV REDIS_URL="${REDIS_URL}"
 ENV SUPERSET_CACHE_REDIS_URL=${REDIS_URL}
-ENV SUPERSET_ENV=\"production\"
-ENV SUPERSET_LOAD_EXAMPLES=\"no\"
-ENV SUPERSET_SECRET_KEY=\"${SUPERSET_SECRET_KEY}\"
+ENV SUPERSET_ENV="production"
+ENV SUPERSET_LOAD_EXAMPLES="no"
+ENV SUPERSET_SECRET_KEY="${SUPERSET_SECRET_KEY}"
 ENV CYPRESS_CONFIG=False
-ENV SUPERSET_PORT=\"${SUPERSET_PORT}\"
+ENV SUPERSET_PORT="${SUPERSET_PORT}"
 
-ENV SQLALCHEMY_DATABASE_URI=\"${DATABASE_URL}\"
+ENV SQLALCHEMY_DATABASE_URI="${DATABASE_URL}"
 ENV SUPERSET_CONFIG_PATH=/app/docker/superset_config.py
 
 EXPOSE 8088
 
+RUN pip install psycopg2-binary
 RUN pip install google
 RUN pip install google-api-core
 RUN pip install google.cloud.bigquery
@@ -47,4 +48,3 @@ RUN chmod +x /app/docker/docker-bootstrap.sh
 
 RUN export SUPERSET_CONFIG_PATH=/app/docker/superset_config.py
 CMD sh -c "./startup.sh"
-#CMD sh -c "./opt/superset/startup.sh"
