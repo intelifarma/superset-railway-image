@@ -1,4 +1,4 @@
-FROM apache/superset:latest
+FROM apache/superset:latest-dev
 
 USER root
 
@@ -24,9 +24,6 @@ ENV SQLALCHEMY_DATABASE_URI="${DATABASE_URL}"
 ENV SUPERSET_CONFIG_PATH=/app/docker/superset_config.py
 
 EXPOSE 8088
-
-# Install PostgreSQL driver into the venv that Superset uses at runtime
-RUN /app/.venv/bin/python -m pip install psycopg2-binary
 
 # Copy files
 COPY startup.sh ./startup.sh
