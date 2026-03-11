@@ -3,11 +3,9 @@ FROM apache/superset:latest
 USER root
 
 ARG DATABASE_URL
-
 ARG REDISHOST
 ARG REDISPORT
 ARG REDIS_URL
-
 ARG SUPERSET_SECRET_KEY
 ARG SUPERSET_PORT=8088
 
@@ -27,24 +25,15 @@ ENV SUPERSET_CONFIG_PATH=/app/docker/superset_config.py
 
 EXPOSE 8088
 
-RUN pip install psycopg2-binary
-RUN pip install google
-RUN pip install google-api-core
-RUN pip install google.cloud.bigquery
-RUN pip install google.cloud.storage
-RUN pip install --upgrade google-api-python-client
+# Install psycopg2 inside the virtual environment
+RUN /app/.venv/bin/pip install psycopg2-binary
 
-# Specify the startup script as the entry point
+# Copy files
 COPY startup.sh ./startup.sh
 COPY bootstrap.sh /app/docker/docker-bootstrap.sh
-COPY superset_config.py superset_config.py
-
-RUN apt-get update
-RUN apt-get install gettext -y
-RUN envsubst < "superset_config.py" > "/app/docker/superset_config.py"
+COPY superset_config.py /app/docker/superset_config.py
 
 RUN chmod +x ./startup.sh
 RUN chmod +x /app/docker/docker-bootstrap.sh
 
-RUN export SUPERSET_CONFIG_PATH=/app/docker/superset_config.py
-CMD sh -c "./startup.sh"
+CMD ["./startup.sh"]
