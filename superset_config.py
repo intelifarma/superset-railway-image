@@ -33,6 +33,9 @@ TALISMAN_ENABLED = False
 FEATURE_FLAGS = {
     "EMBEDDED_SUPERSET": True,
     "ENABLE_TEMPLATE_PROCESSING": True,
+    "DASHBOARD_NATIVE_FILTERS": True,
+    "DASHBOARD_CROSS_FILTERS": True,
+    "ENABLE_EXPLORE_DRAG_AND_DROP": True,
 }
 
 # CORS — allow TradeAudit to embed dashboards
