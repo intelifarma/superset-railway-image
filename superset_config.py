@@ -23,6 +23,13 @@ class CeleryConfig(object):
 
 CELERY_CONFIG = CeleryConfig
 
+# Language / Idioma
+BABEL_DEFAULT_LOCALE = "es"
+LANGUAGES = {
+    "es": {"flag": "es", "name": "Español"},
+    "en": {"flag": "us", "name": "English"},
+}
+
 SECRET_KEY = os.environ.get("SUPERSET_SECRET_KEY", "CHANGE_ME")
 SUPERSET_WEBSERVER_PORT = int(os.environ.get("SUPERSET_PORT", "8088"))
 
