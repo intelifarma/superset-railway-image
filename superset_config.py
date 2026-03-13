@@ -116,41 +116,42 @@ window.featureFlags = {
 // Parent sends: { type: 'setTheme', theme: 'dark'|'light' }
 // This injects/updates a <style> tag with the appropriate overrides
 (function(){
+  // Use structural selectors (#app > div) instead of Emotion class names (.css-xxx)
+  // which change between Superset builds
   var LIGHT_CSS = [
-    'body, #app, .ant-layout { background: transparent !important; }',
-    '.css-1qfjvvo, .css-12fk19l { background: transparent !important; }',
-    '.dashboard-content { background: transparent !important; }',
-    '.ant-card { background: transparent !important; border-color: transparent !important; box-shadow: none !important; }',
-    '.chart-container { background: transparent !important; }',
-    '.dashboard-component-chart-holder { background: transparent !important; }',
-    '.header-with-actions { background: transparent !important; }',
-    '.ant-tabs-content-holder { background: transparent !important; }',
-    '.filter-bar { background: transparent !important; }'
+    'body { background: transparent !important; }',
+    '#app { background: transparent !important; }',
+    '#app > div { background: transparent !important; }',
+    '#app > div > div { background: transparent !important; }',
+    '#app > div > div > div { background: transparent !important; }',
+    'div[class*="ant-layout"] { background: transparent !important; }',
+    'div[class*="dashboard"] { background: transparent !important; }',
+    'div[class*="grid-container"] { background: transparent !important; }',
+    'div[class*="chart-container"] { background: transparent !important; }',
+    'div[class*="filter-bar"] { background: transparent !important; }',
+    'div[class*="Header"] { background: transparent !important; }',
+    'div[class*="tabs-content"] { background: transparent !important; }'
   ].join('\\n');
 
   var DARK_CSS = [
-    'body, #app, .ant-layout { background: transparent !important; color: #e0e0e0 !important; }',
-    '.css-1qfjvvo, .css-12fk19l { background: transparent !important; }',
-    '.dashboard-content { background: transparent !important; }',
-    '.ant-card { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.1) !important; box-shadow: none !important; }',
-    '.chart-container { background: transparent !important; }',
-    '.dashboard-component-chart-holder { background: transparent !important; }',
-    '.header-with-actions { background: transparent !important; color: #e0e0e0 !important; }',
-    '.ant-tabs-content-holder { background: transparent !important; }',
-    '.filter-bar { background: rgba(255,255,255,0.04) !important; }',
-    '.ant-tabs-tab { color: #b0b0b0 !important; }',
-    '.ant-tabs-tab-active .ant-tabs-tab-btn { color: #fff !important; }',
-    '.slice_container { color: #e0e0e0 !important; }',
-    'text, .nv-axis text, .tick text { fill: #b0b0b0 !important; }',
-    '.ant-select-selector { background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.15) !important; color: #e0e0e0 !important; }',
-    '.ant-input { background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.15) !important; color: #e0e0e0 !important; }',
-    'h1,h2,h3,h4,h5,h6,.dashboard-title { color: #f0f0f0 !important; }',
-    '.header-title span { color: #f0f0f0 !important; }',
-    '.number-cell, .cell-text-big { color: #f0f0f0 !important; }',
-    'table, .ant-table { color: #e0e0e0 !important; }',
-    '.ant-table-thead > tr > th { background: rgba(255,255,255,0.06) !important; color: #e0e0e0 !important; border-color: rgba(255,255,255,0.1) !important; }',
-    '.ant-table-tbody > tr > td { border-color: rgba(255,255,255,0.08) !important; }',
-    '.ant-table-tbody > tr:hover > td { background: rgba(255,255,255,0.04) !important; }'
+    'body { background: transparent !important; color: #e0e0e0 !important; }',
+    '#app { background: transparent !important; }',
+    '#app > div { background: transparent !important; }',
+    '#app > div > div { background: transparent !important; }',
+    '#app > div > div > div { background: transparent !important; }',
+    'div[class*="ant-layout"] { background: transparent !important; }',
+    'div[class*="dashboard"] { background: transparent !important; }',
+    'div[class*="grid-container"] { background: transparent !important; }',
+    'div[class*="chart-container"] { background: transparent !important; }',
+    'div[class*="filter-bar"] { background: rgba(255,255,255,0.04) !important; }',
+    'div[class*="Header"] { background: transparent !important; color: #e0e0e0 !important; }',
+    'div[class*="tabs-content"] { background: transparent !important; }',
+    'span, p, label, h1, h2, h3, h4, h5, h6, td, th { color: #e0e0e0 !important; }',
+    'text, tspan { fill: #b0b0b0 !important; }',
+    'input, select, textarea { background: rgba(255,255,255,0.08) !important; color: #e0e0e0 !important; border-color: rgba(255,255,255,0.15) !important; }',
+    'table { color: #e0e0e0 !important; }',
+    'th { background: rgba(255,255,255,0.06) !important; }',
+    'tr:hover td { background: rgba(255,255,255,0.04) !important; }'
   ].join('\\n');
 
   var styleEl = null;
@@ -163,6 +164,8 @@ window.featureFlags = {
     }
     styleEl.textContent = (theme === 'dark') ? DARK_CSS : LIGHT_CSS;
     localStorage.setItem('_embedded_theme', theme);
+    console.log('[TradeAudit] Style tag injected, id:', styleEl.id, 'length:', styleEl.textContent.length, 'theme:', theme);
+    console.log('[TradeAudit] #app background:', window.getComputedStyle(document.getElementById('app') || document.body).backgroundColor);
   }
 
   // Apply saved theme immediately (before React renders)
