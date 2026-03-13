@@ -33,15 +33,17 @@ COPY superset_config.py /app/docker/superset_config.py
 RUN chmod +x ./startup.sh
 RUN chmod +x /app/docker/docker-bootstrap.sh
 
-# Download and compile Spanish translations
-# Try multiple branch names (master → main) in case repo structure changes
-RUN mkdir -p /app/superset/translations/es/LC_MESSAGES && \
-    (curl -fsSL "https://raw.githubusercontent.com/apache/superset/master/superset/translations/es/LC_MESSAGES/messages.po" \
-      -o /app/superset/translations/es/LC_MESSAGES/messages.po 2>/dev/null || \
-     curl -fsSL "https://raw.githubusercontent.com/apache/superset/main/superset/translations/es/LC_MESSAGES/messages.po" \
-      -o /app/superset/translations/es/LC_MESSAGES/messages.po 2>/dev/null || \
-     curl -fsSL "https://raw.githubusercontent.com/apache/superset/4.1.1/superset/translations/es/LC_MESSAGES/messages.po" \
-      -o /app/superset/translations/es/LC_MESSAGES/messages.po 2>/dev/null || true) && \
-    pybabel compile -d /app/superset/translations 2>/dev/null || true
+# Compile Spanish translations
+# Step 1: Try compiling .po files already in the image (latest-dev ships them uncompiled)
+# Step 2: If no .po exists, download from GitHub and compile
+RUN pybabel compile -d /app/superset/translations 2>/dev/null; \
+    if [ ! -f /app/superset/translations/es/LC_MESSAGES/messages.mo ]; then \
+      mkdir -p /app/superset/translations/es/LC_MESSAGES && \
+      curl -fsSL "https://raw.githubusercontent.com/apache/superset/master/superset/translations/es/LC_MESSAGES/messages.po" \
+        -o /app/superset/translations/es/LC_MESSAGES/messages.po 2>/dev/null || \
+      curl -fsSL "https://raw.githubusercontent.com/apache/superset/main/superset/translations/es/LC_MESSAGES/messages.po" \
+        -o /app/superset/translations/es/LC_MESSAGES/messages.po 2>/dev/null; \
+      pybabel compile -d /app/superset/translations 2>/dev/null || true; \
+    fi
 
 CMD ["./startup.sh"]

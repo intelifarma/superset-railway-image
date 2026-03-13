@@ -35,6 +35,7 @@ SUPERSET_WEBSERVER_PORT = int(os.environ.get("SUPERSET_PORT", "8088"))
 
 WTF_CSRF_ENABLED = False
 TALISMAN_ENABLED = False
+CONTENT_SECURITY_POLICY_WARNING = False
 
 # --- Embedded Superset & Guest Tokens ---
 FEATURE_FLAGS = {
@@ -45,9 +46,6 @@ FEATURE_FLAGS = {
     "ENABLE_EXPLORE_DRAG_AND_DROP": True,
     "ENABLE_JAVASCRIPT_CONTROLS": True,
 }
-
-# Suppress CSP warning (handled externally)
-CONTENT_SECURITY_POLICY_WARNING = False
 
 # CORS — allow TradeAudit to embed dashboards
 ENABLE_CORS = True
@@ -72,5 +70,14 @@ HTTP_HEADERS = {
 SESSION_COOKIE_SAMESITE = "None"
 SESSION_COOKIE_SECURE = True
 
-# Public role permissions for embedded dashboards (applied via init_public_role)
-PUBLIC_ROLE_LIKE = "Gamma"
+# Public role gets Alpha permissions (full read access to all datasources/charts)
+PUBLIC_ROLE_LIKE = "Alpha"
+
+# Force light theme for embedded dashboards
+THEME_OVERRIDES = {
+    "colors": {
+        "grayscale": {
+            "light5": "#F5F5F5",
+        },
+    },
+}
