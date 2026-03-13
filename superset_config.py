@@ -78,20 +78,28 @@ PUBLIC_ROLE_LIKE = "Alpha"
 # ---------------------------------------------------------------------------
 # Embedded pages: set light theme + suppress non-critical errors
 # ---------------------------------------------------------------------------
-EMBEDDED_SCRIPT = """<script>
-// Tell Superset to use light theme
+# Must be FIRST in <head> so it runs before Superset's bundle captures window.fetch
+EMBEDDED_SCRIPT = """<meta name="color-scheme" content="light only">
+<script>
+// Force light theme
 localStorage.setItem('theme','light');
-// Intercept non-critical API calls that fail for guest tokens
+localStorage.setItem('ss_theme','light');
+document.documentElement.setAttribute('data-theme','light');
+document.documentElement.style.colorScheme='light';
+// Intercept fetch BEFORE Superset bundle loads
 (function(){
   var _f=window.fetch;
-  window.fetch=function(u,o){
-    var s=(typeof u==='string')?u:(u&&u.url)||'';
-    if(s.indexOf('/feature_flags')!==-1)
-      return Promise.resolve(new Response(JSON.stringify({result:{}}),{status:200,headers:{'Content-Type':'application/json'}}));
-    if(s.indexOf('/language_pack/')!==-1)
-      return Promise.resolve(new Response(JSON.stringify({domain:"superset",locale_data:{superset:{"":{"domain":"superset","lang":"es","plural_forms":"nplurals=2; plural=(n != 1)"}}}}),{status:200,headers:{'Content-Type':'application/json'}}));
-    return _f.apply(this,arguments);
-  };
+  Object.defineProperty(window,'fetch',{
+    configurable:true,writable:true,
+    value:function(u,o){
+      var s=(typeof u==='string')?u:(u&&u.url)||'';
+      if(s.indexOf('feature_flag')!==-1)
+        return Promise.resolve(new Response(JSON.stringify({result:{}}),{status:200,headers:{'Content-Type':'application/json'}}));
+      if(s.indexOf('language_pack')!==-1)
+        return Promise.resolve(new Response(JSON.stringify({domain:"superset",locale_data:{superset:{"":{"domain":"superset","lang":"es","plural_forms":"nplurals=2; plural=(n != 1)"}}}}),{status:200,headers:{'Content-Type':'application/json'}}));
+      return _f.apply(this,arguments);
+    }
+  });
 })();
 </script>"""
 
@@ -103,7 +111,8 @@ def FLASK_APP_MUTATOR(app: Flask):
             return response
         if response.content_type and 'text/html' in response.content_type:
             data = response.get_data(as_text=True)
-            if '</head>' in data:
-                data = data.replace('</head>', EMBEDDED_SCRIPT + '</head>')
+            # Inject at the START of <head> so it runs before any Superset scripts
+            if '<head>' in data:
+                data = data.replace('<head>', '<head>' + EMBEDDED_SCRIPT, 1)
                 response.set_data(data)
         return response
