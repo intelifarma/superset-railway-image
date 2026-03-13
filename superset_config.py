@@ -1,5 +1,6 @@
 import logging
 import os
+from flask import Flask
 
 logger = logging.getLogger()
 
@@ -73,22 +74,48 @@ SESSION_COOKIE_SECURE = True
 # Public role gets Alpha permissions (full read access to all datasources/charts)
 PUBLIC_ROLE_LIKE = "Alpha"
 
-# Force light theme (Ant Design 5 token format for Superset 5.x)
-THEME_OVERRIDES = {
-    "algorithm": "defaultAlgorithm",
-    "token": {
-        "colorBgBase": "#ffffff",
-        "colorBgContainer": "#ffffff",
-        "colorBgLayout": "#f5f5f5",
-        "colorBgElevated": "#ffffff",
-    },
-    "colors": {
-        "grayscale": {
-            "light5": "#F5F5F5",
-        },
-    },
-}
 
-# Make feature flags accessible to guest tokens without API call
-# This injects flags directly into the page, avoiding the /api/v1/security/feature_flags query
-EMBEDDED_SUPERSET = True
+# ---------------------------------------------------------------------------
+# Inject light-theme CSS + suppress console errors on embedded pages
+# ---------------------------------------------------------------------------
+LIGHT_THEME_CSS = """<style>
+body, #app, .embedded-page, [data-test="embedded-page"],
+div[id^="root"], main, .dashboard-content, .grid-container,
+.dashboard, .dashboard-component, .css-dashboard {
+  background-color: #f5f5f5 !important;
+  color-scheme: light !important;
+}
+.header-with-actions, .dashboard-header { background: #fff !important; }
+.chart-container { background: #fff !important; border-radius: 8px; }
+</style>"""
+
+SUPPRESS_ERRORS_JS = """<script>
+// Suppress non-critical embedded errors (feature flags, language pack)
+(function(){
+  var origFetch = window.fetch;
+  window.fetch = function(url, opts) {
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    if (u.includes('feature_flags') || u.includes('language_pack')) {
+      if (u.includes('feature_flags')) {
+        return Promise.resolve(new Response(JSON.stringify({result:{}}),
+          {status:200, headers:{'Content-Type':'application/json'}}));
+      }
+      if (u.includes('language_pack')) {
+        return Promise.resolve(new Response(JSON.stringify({}),
+          {status:200, headers:{'Content-Type':'application/json'}}));
+      }
+    }
+    return origFetch.apply(this, arguments);
+  };
+})();
+</script>"""
+
+def FLASK_APP_MUTATOR(app: Flask):
+    @app.after_request
+    def inject_embedded_overrides(response):
+        if response.content_type and 'text/html' in response.content_type:
+            data = response.get_data(as_text=True)
+            if '</head>' in data:
+                data = data.replace('</head>', LIGHT_THEME_CSS + SUPPRESS_ERRORS_JS + '</head>')
+                response.set_data(data)
+        return response
