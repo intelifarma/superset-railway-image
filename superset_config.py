@@ -86,6 +86,8 @@ PUBLIC_ROLE_LIKE = "Alpha"
 # Based on: https://github.com/apache/superset/issues/32357#issuecomment
 # ---------------------------------------------------------------------------
 EMBEDDED_SCRIPT = """<script>
+console.log('[TradeAudit EMBEDDED_SCRIPT] Script loaded inside iframe');
+
 // Feature flags — Superset reads window.featureFlags
 window.featureFlags = {
   ENABLE_JAVASCRIPT_CONTROLS: true,
@@ -164,11 +166,15 @@ window.featureFlags = {
   }
 
   // Apply saved theme immediately (before React renders)
-  applyTheme(localStorage.getItem('_embedded_theme') || 'light');
+  var savedTheme = localStorage.getItem('_embedded_theme') || 'light';
+  console.log('[TradeAudit] Applying saved theme:', savedTheme);
+  applyTheme(savedTheme);
 
   // Listen for theme changes from parent
   window.addEventListener('message', function(e) {
+    console.log('[TradeAudit] postMessage received:', e.data);
     if (e.data && e.data.type === 'setTheme') {
+      console.log('[TradeAudit] Switching theme to:', e.data.theme);
       applyTheme(e.data.theme === 'dark' ? 'dark' : 'light');
     }
   });
