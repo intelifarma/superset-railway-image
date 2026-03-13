@@ -33,4 +33,7 @@ COPY superset_config.py /app/docker/superset_config.py
 RUN chmod +x ./startup.sh
 RUN chmod +x /app/docker/docker-bootstrap.sh
 
+# Compile translation files for i18n support
+RUN pybabel compile -d /app/superset/translations
+
 CMD ["./startup.sh"]
