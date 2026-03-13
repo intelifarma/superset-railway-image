@@ -43,7 +43,11 @@ FEATURE_FLAGS = {
     "DASHBOARD_NATIVE_FILTERS": True,
     "DASHBOARD_CROSS_FILTERS": True,
     "ENABLE_EXPLORE_DRAG_AND_DROP": True,
+    "ENABLE_JAVASCRIPT_CONTROLS": True,
 }
+
+# Suppress CSP warning (handled externally)
+CONTENT_SECURITY_POLICY_WARNING = False
 
 # CORS — allow TradeAudit to embed dashboards
 ENABLE_CORS = True

@@ -33,11 +33,15 @@ COPY superset_config.py /app/docker/superset_config.py
 RUN chmod +x ./startup.sh
 RUN chmod +x /app/docker/docker-bootstrap.sh
 
-# Download and compile Spanish translations (not included in Docker images since 5.0)
-# Uses "| true" to suppress .po format errors, same as official Superset Dockerfile
+# Download and compile Spanish translations
+# Try multiple branch names (master → main) in case repo structure changes
 RUN mkdir -p /app/superset/translations/es/LC_MESSAGES && \
-    curl -fsSL "https://raw.githubusercontent.com/apache/superset/master/superset/translations/es/LC_MESSAGES/messages.po" \
-      -o /app/superset/translations/es/LC_MESSAGES/messages.po && \
-    pybabel compile -d /app/superset/translations | true
+    (curl -fsSL "https://raw.githubusercontent.com/apache/superset/master/superset/translations/es/LC_MESSAGES/messages.po" \
+      -o /app/superset/translations/es/LC_MESSAGES/messages.po 2>/dev/null || \
+     curl -fsSL "https://raw.githubusercontent.com/apache/superset/main/superset/translations/es/LC_MESSAGES/messages.po" \
+      -o /app/superset/translations/es/LC_MESSAGES/messages.po 2>/dev/null || \
+     curl -fsSL "https://raw.githubusercontent.com/apache/superset/4.1.1/superset/translations/es/LC_MESSAGES/messages.po" \
+      -o /app/superset/translations/es/LC_MESSAGES/messages.po 2>/dev/null || true) && \
+    pybabel compile -d /app/superset/translations 2>/dev/null || true
 
 CMD ["./startup.sh"]
