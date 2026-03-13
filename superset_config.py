@@ -83,8 +83,6 @@ PUBLIC_ROLE_LIKE = "Alpha"
 # ---------------------------------------------------------------------------
 EMBEDDED_SCRIPT = """<script>
 // Fix: Superset reads window.featureFlags (NOT window.__superset.featureFlags)
-// The embedded entry point never calls initFeatureFlags(), so we pre-set it.
-// initFeatureFlags() has guard: if (!window.featureFlags) — so our values persist.
 window.featureFlags = {
   ENABLE_JAVASCRIPT_CONTROLS: true,
   EMBEDDED_SUPERSET: true,
@@ -93,6 +91,23 @@ window.featureFlags = {
   ENABLE_TEMPLATE_PROCESSING: true,
   ENABLE_EXPLORE_DRAG_AND_DROP: true
 };
+
+// Theme: prevent OS dark mode from leaking into the initial render.
+// The parent platform will call setThemeMode() via the SDK for the real theme,
+// but React must NOT start in dark mode just because the user's OS is dark.
+// Default to light; the SDK's setThemeMode() will override dynamically.
+(function(){
+  var _mm = window.matchMedia;
+  window.matchMedia = function(q) {
+    if (q === '(prefers-color-scheme: dark)') {
+      return {matches: false, media: q,
+        addListener:function(){}, removeListener:function(){},
+        addEventListener:function(){}, removeEventListener:function(){},
+        dispatchEvent:function(){}};
+    }
+    return _mm.call(this, q);
+  };
+})();
 
 // Intercept non-critical API calls that fail for guest tokens
 (function(){
