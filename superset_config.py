@@ -38,8 +38,7 @@ WTF_CSRF_ENABLED = False
 TALISMAN_ENABLED = False
 CONTENT_SECURITY_POLICY_WARNING = False
 
-# Dark/light theme is controlled dynamically by the parent platform via postMessage
-# Do NOT set THEME_DARK = None (that disables dark mode entirely)
+# Theme is controlled by the parent platform via SDK's setThemeMode() method
 
 # --- Embedded Superset & Guest Tokens ---
 FEATURE_FLAGS = {
@@ -83,9 +82,10 @@ PUBLIC_ROLE_LIKE = "Alpha"
 # (PR #37367 fix — inject featureFlags before setupPlugins runs)
 # ---------------------------------------------------------------------------
 EMBEDDED_SCRIPT = """<script>
-// Pre-inject feature flags so setupPlugins doesn't query the API
-window.__superset = window.__superset || {};
-window.__superset.featureFlags = {
+// Fix: Superset reads window.featureFlags (NOT window.__superset.featureFlags)
+// The embedded entry point never calls initFeatureFlags(), so we pre-set it.
+// initFeatureFlags() has guard: if (!window.featureFlags) — so our values persist.
+window.featureFlags = {
   ENABLE_JAVASCRIPT_CONTROLS: true,
   EMBEDDED_SUPERSET: true,
   DASHBOARD_NATIVE_FILTERS: true,
@@ -93,36 +93,6 @@ window.__superset.featureFlags = {
   ENABLE_TEMPLATE_PROCESSING: true,
   ENABLE_EXPLORE_DRAG_AND_DROP: true
 };
-
-// --- Theme: controlled by parent platform via postMessage ---
-// Read stored theme from localStorage (set by previous postMessage from parent)
-var _embeddedTheme = localStorage.getItem('_embedded_theme');
-var _isDark = _embeddedTheme === 'dark';
-
-// Set color-scheme meta and CSS
-document.documentElement.style.colorScheme = _isDark ? 'dark' : 'light';
-
-// Override matchMedia so Superset React sees the correct preference
-var _mm = window.matchMedia;
-window.matchMedia = function(q) {
-  if (q === '(prefers-color-scheme: dark)') {
-    return {matches: _isDark, media:q, addListener:function(){}, removeListener:function(){},
-            addEventListener:function(){}, removeEventListener:function(){}, dispatchEvent:function(){}};
-  }
-  return _mm.call(this, q);
-};
-
-// Listen for theme changes from parent platform
-window.addEventListener('message', function(e) {
-  if (e.data && e.data.type === 'setTheme') {
-    var newTheme = e.data.theme === 'dark' ? 'dark' : 'light';
-    if (newTheme !== localStorage.getItem('_embedded_theme')) {
-      localStorage.setItem('_embedded_theme', newTheme);
-      // Reload so React picks up the new theme from the overridden matchMedia
-      window.location.reload();
-    }
-  }
-});
 
 // Intercept non-critical API calls that fail for guest tokens
 (function(){
