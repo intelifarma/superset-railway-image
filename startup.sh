@@ -64,10 +64,6 @@ echo_step "3" "Starting" "Setting up roles and perms"
 superset init
 echo_step "3" "Complete" "Setting up roles and perms"
 
-# Grant Public role embedded-dashboard permissions
-echo "Applying embedded-dashboard permissions to Public role..."
-python /app/init_public_role.py
-
 if [ "$SUPERSET_LOAD_EXAMPLES" = "yes" ]; then
     # Load some data to play with
     echo_step "4" "Starting" "Loading examples"
