@@ -116,29 +116,24 @@ window.featureFlags = {
 // Parent sends: { type: 'setTheme', theme: 'dark'|'light' }
 // This injects/updates a <style> tag with the appropriate overrides
 (function(){
-  // Use structural selectors (#app > div) instead of Emotion class names (.css-xxx)
-  // which change between Superset builds
+  // Nuclear approach: override ALL divs background, then refine
+  // #app may not exist in embedded mode, so use body > div chain
   var LIGHT_CSS = [
-    'body { background: transparent !important; }',
-    '#app { background: transparent !important; }',
-    '#app > div { background: transparent !important; }',
-    '#app > div > div { background: transparent !important; }',
-    '#app > div > div > div { background: transparent !important; }',
+    'body, body > div, body > div > div, body > div > div > div, body > div > div > div > div { background: transparent !important; }',
     'div[class*="ant-layout"] { background: transparent !important; }',
     'div[class*="dashboard"] { background: transparent !important; }',
     'div[class*="grid-container"] { background: transparent !important; }',
     'div[class*="chart-container"] { background: transparent !important; }',
     'div[class*="filter-bar"] { background: transparent !important; }',
     'div[class*="Header"] { background: transparent !important; }',
-    'div[class*="tabs-content"] { background: transparent !important; }'
+    'div[class*="tabs-content"] { background: transparent !important; }',
+    'div[data-test] { background: transparent !important; }',
+    'section { background: transparent !important; }',
+    'main { background: transparent !important; }'
   ].join('\\n');
 
   var DARK_CSS = [
-    'body { background: transparent !important; color: #e0e0e0 !important; }',
-    '#app { background: transparent !important; }',
-    '#app > div { background: transparent !important; }',
-    '#app > div > div { background: transparent !important; }',
-    '#app > div > div > div { background: transparent !important; }',
+    'body, body > div, body > div > div, body > div > div > div, body > div > div > div > div { background: transparent !important; color: #e0e0e0 !important; }',
     'div[class*="ant-layout"] { background: transparent !important; }',
     'div[class*="dashboard"] { background: transparent !important; }',
     'div[class*="grid-container"] { background: transparent !important; }',
@@ -146,6 +141,9 @@ window.featureFlags = {
     'div[class*="filter-bar"] { background: rgba(255,255,255,0.04) !important; }',
     'div[class*="Header"] { background: transparent !important; color: #e0e0e0 !important; }',
     'div[class*="tabs-content"] { background: transparent !important; }',
+    'div[data-test] { background: transparent !important; }',
+    'section { background: transparent !important; }',
+    'main { background: transparent !important; }',
     'span, p, label, h1, h2, h3, h4, h5, h6, td, th { color: #e0e0e0 !important; }',
     'text, tspan { fill: #b0b0b0 !important; }',
     'input, select, textarea { background: rgba(255,255,255,0.08) !important; color: #e0e0e0 !important; border-color: rgba(255,255,255,0.15) !important; }',
@@ -153,6 +151,32 @@ window.featureFlags = {
     'th { background: rgba(255,255,255,0.06) !important; }',
     'tr:hover td { background: rgba(255,255,255,0.04) !important; }'
   ].join('\\n');
+
+  // Debug: dump DOM structure after React renders
+  setTimeout(function() {
+    var el = document.body;
+    var path = [];
+    var current = el ? el.firstElementChild : null;
+    for (var i = 0; i < 8 && current; i++) {
+      var id = current.id ? '#' + current.id : '';
+      var cls = current.className ? '.' + String(current.className).split(' ')[0].substring(0, 20) : '';
+      var bg = window.getComputedStyle(current).backgroundColor;
+      path.push(current.tagName + id + cls + ' [bg:' + bg + ']');
+      current = current.firstElementChild;
+    }
+    console.log('[TradeAudit] DOM structure:', path.join(' > '));
+    // Also find all elements with non-transparent background
+    var allBg = document.querySelectorAll('*');
+    var grays = [];
+    for (var j = 0; j < allBg.length && grays.length < 10; j++) {
+      var bgc = window.getComputedStyle(allBg[j]).backgroundColor;
+      if (bgc && bgc !== 'rgba(0, 0, 0, 0)' && bgc !== 'transparent') {
+        var tag = allBg[j].tagName + (allBg[j].id ? '#' + allBg[j].id : '') + (allBg[j].className ? '.' + String(allBg[j].className).split(' ')[0].substring(0, 25) : '');
+        grays.push(tag + ' → ' + bgc);
+      }
+    }
+    console.log('[TradeAudit] Elements with background:', grays);
+  }, 5000);
 
   var styleEl = null;
 
@@ -164,8 +188,7 @@ window.featureFlags = {
     }
     styleEl.textContent = (theme === 'dark') ? DARK_CSS : LIGHT_CSS;
     localStorage.setItem('_embedded_theme', theme);
-    console.log('[TradeAudit] Style tag injected, id:', styleEl.id, 'length:', styleEl.textContent.length, 'theme:', theme);
-    console.log('[TradeAudit] #app background:', window.getComputedStyle(document.getElementById('app') || document.body).backgroundColor);
+    console.log('[TradeAudit] Style tag injected, length:', styleEl.textContent.length, 'theme:', theme);
   }
 
   // Apply saved theme immediately (before React renders)
