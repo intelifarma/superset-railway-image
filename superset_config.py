@@ -81,7 +81,14 @@ PUBLIC_ROLE_LIKE = "Alpha"
 # Embedded pages: pre-inject feature flags + suppress errors
 # (PR #37367 fix — inject featureFlags before setupPlugins runs)
 # ---------------------------------------------------------------------------
-EMBEDDED_SCRIPT = """<script>
+EMBEDDED_SCRIPT = """<style>
+/* Immediate white background — prevents dark flash before React renders */
+html, body { background: #fff !important; color-scheme: light; }
+/* Remove chart card borders */
+.css-dashboard .chart-container, .dashboard-component-chart-holder,
+[data-test="chart-container"] { border: none !important; box-shadow: none !important; }
+</style>
+<script>
 // Fix: Superset reads window.featureFlags (NOT window.__superset.featureFlags)
 window.featureFlags = {
   ENABLE_JAVASCRIPT_CONTROLS: true,
