@@ -38,6 +38,9 @@ WTF_CSRF_ENABLED = False
 TALISMAN_ENABLED = False
 CONTENT_SECURITY_POLICY_WARNING = False
 
+# Dark/light theme is controlled dynamically by the parent platform via postMessage
+# Do NOT set THEME_DARK = None (that disables dark mode entirely)
+
 # --- Embedded Superset & Guest Tokens ---
 FEATURE_FLAGS = {
     "EMBEDDED_SUPERSET": True,
@@ -62,7 +65,7 @@ GUEST_ROLE_NAME = "Public"
 GUEST_TOKEN_JWT_SECRET = os.environ.get("SUPERSET_SECRET_KEY", "CHANGE_ME")
 GUEST_TOKEN_JWT_ALGO = "HS256"
 GUEST_TOKEN_HEADER_NAME = "X-GuestToken"
-GUEST_TOKEN_JWT_EXP_SECONDS = 600
+GUEST_TOKEN_JWT_EXP_SECONDS = 3600  # 1 hour — reduces refresh failures
 
 # Allow embedding in iframes
 HTTP_HEADERS = {
@@ -76,28 +79,65 @@ PUBLIC_ROLE_LIKE = "Alpha"
 
 
 # ---------------------------------------------------------------------------
-# Embedded pages: set light theme + suppress non-critical errors
+# Embedded pages: pre-inject feature flags + suppress errors
+# (PR #37367 fix — inject featureFlags before setupPlugins runs)
 # ---------------------------------------------------------------------------
-# Must be FIRST in <head> so it runs before Superset's bundle captures window.fetch
-EMBEDDED_SCRIPT = """<meta name="color-scheme" content="light only">
-<script>
-// Force light theme
-localStorage.setItem('theme','light');
-localStorage.setItem('ss_theme','light');
-document.documentElement.setAttribute('data-theme','light');
-document.documentElement.style.colorScheme='light';
-// Intercept fetch BEFORE Superset bundle loads
+EMBEDDED_SCRIPT = """<script>
+// Pre-inject feature flags so setupPlugins doesn't query the API
+window.__superset = window.__superset || {};
+window.__superset.featureFlags = {
+  ENABLE_JAVASCRIPT_CONTROLS: true,
+  EMBEDDED_SUPERSET: true,
+  DASHBOARD_NATIVE_FILTERS: true,
+  DASHBOARD_CROSS_FILTERS: true,
+  ENABLE_TEMPLATE_PROCESSING: true,
+  ENABLE_EXPLORE_DRAG_AND_DROP: true
+};
+
+// --- Theme: controlled by parent platform via postMessage ---
+// Read stored theme from localStorage (set by previous postMessage from parent)
+var _embeddedTheme = localStorage.getItem('_embedded_theme');
+var _isDark = _embeddedTheme === 'dark';
+
+// Set color-scheme meta and CSS
+document.documentElement.style.colorScheme = _isDark ? 'dark' : 'light';
+
+// Override matchMedia so Superset React sees the correct preference
+var _mm = window.matchMedia;
+window.matchMedia = function(q) {
+  if (q === '(prefers-color-scheme: dark)') {
+    return {matches: _isDark, media:q, addListener:function(){}, removeListener:function(){},
+            addEventListener:function(){}, removeEventListener:function(){}, dispatchEvent:function(){}};
+  }
+  return _mm.call(this, q);
+};
+
+// Listen for theme changes from parent platform
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'setTheme') {
+    var newTheme = e.data.theme === 'dark' ? 'dark' : 'light';
+    if (newTheme !== localStorage.getItem('_embedded_theme')) {
+      localStorage.setItem('_embedded_theme', newTheme);
+      // Reload so React picks up the new theme from the overridden matchMedia
+      window.location.reload();
+    }
+  }
+});
+
+// Intercept non-critical API calls that fail for guest tokens
 (function(){
-  var _f=window.fetch;
-  Object.defineProperty(window,'fetch',{
-    configurable:true,writable:true,
-    value:function(u,o){
-      var s=(typeof u==='string')?u:(u&&u.url)||'';
-      if(s.indexOf('feature_flag')!==-1)
-        return Promise.resolve(new Response(JSON.stringify({result:{}}),{status:200,headers:{'Content-Type':'application/json'}}));
-      if(s.indexOf('language_pack')!==-1)
-        return Promise.resolve(new Response(JSON.stringify({domain:"superset",locale_data:{superset:{"":{"domain":"superset","lang":"es","plural_forms":"nplurals=2; plural=(n != 1)"}}}}),{status:200,headers:{'Content-Type':'application/json'}}));
-      return _f.apply(this,arguments);
+  var _f = window.fetch;
+  Object.defineProperty(window, 'fetch', {configurable:true, writable:true,
+    value: function(u, o) {
+      var s = (typeof u === 'string') ? u : (u && u.url) || '';
+      if (s.indexOf('feature_flag') !== -1)
+        return Promise.resolve(new Response(JSON.stringify({result:{}}),
+          {status:200, headers:{'Content-Type':'application/json'}}));
+      if (s.indexOf('language_pack') !== -1)
+        return Promise.resolve(new Response(
+          JSON.stringify({domain:"superset",locale_data:{superset:{"":{"domain":"superset","lang":"es","plural_forms":"nplurals=2; plural=(n != 1)"}}}}),
+          {status:200, headers:{'Content-Type':'application/json'}}));
+      return _f.apply(this, arguments);
     }
   });
 })();
@@ -105,13 +145,11 @@ document.documentElement.style.colorScheme='light';
 
 def FLASK_APP_MUTATOR(app: Flask):
     @app.after_request
-    def inject_embedded_theme(response):
-        # Only on /embedded/ pages
+    def inject_embedded_overrides(response):
         if '/embedded/' not in flask_request.path:
             return response
         if response.content_type and 'text/html' in response.content_type:
             data = response.get_data(as_text=True)
-            # Inject at the START of <head> so it runs before any Superset scripts
             if '<head>' in data:
                 data = data.replace('<head>', '<head>' + EMBEDDED_SCRIPT, 1)
                 response.set_data(data)
