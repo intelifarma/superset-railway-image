@@ -146,12 +146,18 @@ window.featureFlags = {
     'div[data-test] { background: transparent !important; }',
     'section { background: transparent !important; }',
     'main { background: transparent !important; }',
-    'span, p, label, h1, h2, h3, h4, h5, h6, td, th { color: #e0e0e0 !important; }',
-    'text, tspan { fill: #b0b0b0 !important; }',
+    '* { color: #e0e0e0 !important; }',
+    'text, tspan { fill: #c0c0c0 !important; }',
+    'svg text { fill: #c0c0c0 !important; }',
+    '.header-title, .header-title span, [class*="header-title"] { color: #ffffff !important; }',
+    '[class*="big_number"], [class*="BigNumber"], [class*="number"] { color: #ffffff !important; }',
+    'div[class*="slice_container"] * { color: #e0e0e0 !important; }',
     'input, select, textarea { background: rgba(255,255,255,0.08) !important; color: #e0e0e0 !important; border-color: rgba(255,255,255,0.15) !important; }',
     'table { color: #e0e0e0 !important; }',
     'th { background: rgba(255,255,255,0.06) !important; }',
-    'tr:hover td { background: rgba(255,255,255,0.04) !important; }'
+    'tr:hover td { background: rgba(255,255,255,0.04) !important; }',
+    'a { color: #8ab4f8 !important; }',
+    '[class*="tooltip"] { background: #1e1e2e !important; color: #e0e0e0 !important; }'
   ].join('\\n');
 
   // Debug: dump DOM structure after React renders
