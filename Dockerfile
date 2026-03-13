@@ -29,6 +29,7 @@ EXPOSE 8088
 COPY startup.sh ./startup.sh
 COPY bootstrap.sh /app/docker/docker-bootstrap.sh
 COPY superset_config.py /app/docker/superset_config.py
+COPY init_public_role.py /app/init_public_role.py
 
 RUN chmod +x ./startup.sh
 RUN chmod +x /app/docker/docker-bootstrap.sh

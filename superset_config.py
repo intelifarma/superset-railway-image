@@ -67,3 +67,6 @@ HTTP_HEADERS = {
 }
 SESSION_COOKIE_SAMESITE = "None"
 SESSION_COOKIE_SECURE = True
+
+# Public role permissions for embedded dashboards (applied via init_public_role)
+PUBLIC_ROLE_LIKE = "Gamma"
