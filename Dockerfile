@@ -33,17 +33,19 @@ COPY superset_config.py /app/docker/superset_config.py
 RUN chmod +x ./startup.sh
 RUN chmod +x /app/docker/docker-bootstrap.sh
 
-# Compile Spanish translations
-# Step 1: Try compiling .po files already in the image (latest-dev ships them uncompiled)
-# Step 2: If no .po exists, download from GitHub and compile
-RUN pybabel compile -d /app/superset/translations 2>/dev/null; \
-    if [ ! -f /app/superset/translations/es/LC_MESSAGES/messages.mo ]; then \
-      mkdir -p /app/superset/translations/es/LC_MESSAGES && \
-      curl -fsSL "https://raw.githubusercontent.com/apache/superset/master/superset/translations/es/LC_MESSAGES/messages.po" \
-        -o /app/superset/translations/es/LC_MESSAGES/messages.po 2>/dev/null || \
-      curl -fsSL "https://raw.githubusercontent.com/apache/superset/main/superset/translations/es/LC_MESSAGES/messages.po" \
-        -o /app/superset/translations/es/LC_MESSAGES/messages.po 2>/dev/null; \
-      pybabel compile -d /app/superset/translations 2>/dev/null || true; \
-    fi
+# Compile ALL translations that ship with the image (includes Spanish)
+# Use -f to force compilation even if .po has minor formatting issues
+RUN find /app/superset/translations -name "messages.po" -exec sh -c \
+    'dir=$(dirname "$1"); pybabel compile -f -i "$1" -o "$dir/messages.mo" 2>/dev/null' _ {} \; ; \
+    ls -la /app/superset/translations/es/LC_MESSAGES/ 2>/dev/null || \
+    echo "WARNING: Spanish translations not found, downloading..." && \
+    mkdir -p /app/superset/translations/es/LC_MESSAGES && \
+    (curl -fsSL "https://raw.githubusercontent.com/apache/superset/master/superset/translations/es/LC_MESSAGES/messages.po" \
+      -o /tmp/messages_es.po 2>/dev/null || \
+     curl -fsSL "https://raw.githubusercontent.com/apache/superset/main/superset/translations/es/LC_MESSAGES/messages.po" \
+      -o /tmp/messages_es.po 2>/dev/null) && \
+    [ -f /tmp/messages_es.po ] && \
+    pybabel compile -f -i /tmp/messages_es.po -o /app/superset/translations/es/LC_MESSAGES/messages.mo 2>/dev/null; \
+    echo "Translation .mo files:" && find /app/superset/translations -name "*.mo" -ls
 
 CMD ["./startup.sh"]

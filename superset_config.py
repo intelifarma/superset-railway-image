@@ -73,11 +73,22 @@ SESSION_COOKIE_SECURE = True
 # Public role gets Alpha permissions (full read access to all datasources/charts)
 PUBLIC_ROLE_LIKE = "Alpha"
 
-# Force light theme for embedded dashboards
+# Force light theme (Ant Design 5 token format for Superset 5.x)
 THEME_OVERRIDES = {
+    "algorithm": "defaultAlgorithm",
+    "token": {
+        "colorBgBase": "#ffffff",
+        "colorBgContainer": "#ffffff",
+        "colorBgLayout": "#f5f5f5",
+        "colorBgElevated": "#ffffff",
+    },
     "colors": {
         "grayscale": {
             "light5": "#F5F5F5",
         },
     },
 }
+
+# Make feature flags accessible to guest tokens without API call
+# This injects flags directly into the page, avoiding the /api/v1/security/feature_flags query
+EMBEDDED_SUPERSET = True
