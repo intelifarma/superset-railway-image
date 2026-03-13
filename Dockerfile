@@ -34,9 +34,14 @@ RUN chmod +x ./startup.sh
 RUN chmod +x /app/docker/docker-bootstrap.sh
 
 # Download and compile Spanish translations (not included in Docker images since 5.0)
-RUN mkdir -p /app/superset/translations/es/LC_MESSAGES && \
+RUN apt-get update && apt-get install -y --no-install-recommends gettext && \
+    mkdir -p /app/superset/translations/es/LC_MESSAGES && \
     curl -fsSL "https://raw.githubusercontent.com/apache/superset/master/superset/translations/es/LC_MESSAGES/messages.po" \
       -o /app/superset/translations/es/LC_MESSAGES/messages.po && \
-    pybabel compile -d /app/superset/translations --use-fuzzy
+    msgfmt --check-format -o /app/superset/translations/es/LC_MESSAGES/messages.mo \
+      /app/superset/translations/es/LC_MESSAGES/messages.po || \
+    msgfmt -o /app/superset/translations/es/LC_MESSAGES/messages.mo \
+      /app/superset/translations/es/LC_MESSAGES/messages.po && \
+    apt-get purge -y gettext && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
 CMD ["./startup.sh"]
