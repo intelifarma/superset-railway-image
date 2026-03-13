@@ -38,7 +38,20 @@ WTF_CSRF_ENABLED = False
 TALISMAN_ENABLED = False
 CONTENT_SECURITY_POLICY_WARNING = False
 
-# Theme is controlled by the parent platform via SDK's setThemeMode() method
+# --- Theming (Ant Design v5 tokens) ---
+# Both themes use transparent background so embedded dashboards blend with parent
+# The parent platform switches between them via SDK setThemeMode('default'/'dark')
+THEME_DEFAULT = {
+    "token": {
+        "colorBgLayout": "transparent",
+    }
+}
+THEME_DARK = {
+    "algorithm": "dark",
+    "token": {
+        "colorBgLayout": "transparent",
+    }
+}
 
 # --- Embedded Superset & Guest Tokens ---
 FEATURE_FLAGS = {
@@ -81,12 +94,8 @@ PUBLIC_ROLE_LIKE = "Alpha"
 # Embedded pages: pre-inject feature flags + suppress errors
 # (PR #37367 fix — inject featureFlags before setupPlugins runs)
 # ---------------------------------------------------------------------------
-EMBEDDED_SCRIPT = """<style>
-/* Prevent dark flash before React renders */
-html, body { color-scheme: light; }
-</style>
-<script>
-// Fix: Superset reads window.featureFlags (NOT window.__superset.featureFlags)
+EMBEDDED_SCRIPT = """<script>
+// Feature flags — Superset reads window.featureFlags
 window.featureFlags = {
   ENABLE_JAVASCRIPT_CONTROLS: true,
   EMBEDDED_SUPERSET: true,
@@ -96,15 +105,14 @@ window.featureFlags = {
   ENABLE_EXPLORE_DRAG_AND_DROP: true
 };
 
-// Theme: prevent OS dark mode from leaking into the initial render.
-// The parent platform will call setThemeMode() via the SDK for the real theme,
-// but React must NOT start in dark mode just because the user's OS is dark.
-// Default to light; the SDK's setThemeMode() will override dynamically.
+// Theme: read stored preference (set by parent via postMessage)
+// On first visit defaults to light; after toggle, localStorage has the real value
+var _wantDark = localStorage.getItem('_embedded_theme') === 'dark';
 (function(){
   var _mm = window.matchMedia;
   window.matchMedia = function(q) {
     if (q === '(prefers-color-scheme: dark)') {
-      return {matches: false, media: q,
+      return {matches: _wantDark, media: q,
         addListener:function(){}, removeListener:function(){},
         addEventListener:function(){}, removeEventListener:function(){},
         dispatchEvent:function(){}};
@@ -112,6 +120,18 @@ window.featureFlags = {
     return _mm.call(this, q);
   };
 })();
+
+// Fallback: listen for theme changes from parent via postMessage
+// If setThemeMode via SDK doesn't work, this reloads with the correct theme
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'setTheme') {
+    var next = e.data.theme === 'dark' ? 'dark' : 'light';
+    if (next !== localStorage.getItem('_embedded_theme')) {
+      localStorage.setItem('_embedded_theme', next);
+      window.location.reload();
+    }
+  }
+});
 
 // Intercept non-critical API calls that fail for guest tokens
 (function(){
