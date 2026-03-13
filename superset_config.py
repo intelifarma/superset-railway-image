@@ -119,7 +119,8 @@ window.featureFlags = {
   // Nuclear approach: override ALL divs background, then refine
   // #app may not exist in embedded mode, so use body > div chain
   var LIGHT_CSS = [
-    'html, body, body > div, body > div > div, body > div > div > div, body > div > div > div > div { background: transparent !important; }',
+    ':root { color-scheme: normal !important; }',
+    'html, body, body > div, body > div > div, body > div > div > div, body > div > div > div > div { background: transparent !important; background-color: transparent !important; }',
     'div[class*="ant-layout"] { background: transparent !important; }',
     'div[class*="dashboard"] { background: transparent !important; }',
     'div[class*="grid-container"] { background: transparent !important; }',
@@ -133,7 +134,8 @@ window.featureFlags = {
   ].join('\\n');
 
   var DARK_CSS = [
-    'html, body, body > div, body > div > div, body > div > div > div, body > div > div > div > div { background: transparent !important; color: #e0e0e0 !important; }',
+    ':root { color-scheme: normal !important; }',
+    'html, body, body > div, body > div > div, body > div > div > div, body > div > div > div > div { background: transparent !important; background-color: transparent !important; color: #e0e0e0 !important; }',
     'div[class*="ant-layout"] { background: transparent !important; }',
     'div[class*="dashboard"] { background: transparent !important; }',
     'div[class*="grid-container"] { background: transparent !important; }',
