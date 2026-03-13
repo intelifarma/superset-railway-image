@@ -1,6 +1,6 @@
 import logging
 import os
-from flask import Flask
+from flask import Flask, request as flask_request
 
 logger = logging.getLogger()
 
@@ -76,46 +76,34 @@ PUBLIC_ROLE_LIKE = "Alpha"
 
 
 # ---------------------------------------------------------------------------
-# Inject light-theme CSS + suppress console errors on embedded pages
+# Embedded pages: set light theme + suppress non-critical errors
 # ---------------------------------------------------------------------------
-LIGHT_THEME_CSS = """<style>
-body, #app, .embedded-page, [data-test="embedded-page"],
-div[id^="root"], main, .dashboard-content, .grid-container,
-.dashboard, .dashboard-component, .css-dashboard {
-  background-color: #f5f5f5 !important;
-  color-scheme: light !important;
-}
-.header-with-actions, .dashboard-header { background: #fff !important; }
-.chart-container { background: #fff !important; border-radius: 8px; }
-</style>"""
-
-SUPPRESS_ERRORS_JS = """<script>
-// Suppress non-critical embedded errors (feature flags, language pack)
+EMBEDDED_SCRIPT = """<script>
+// Tell Superset to use light theme
+localStorage.setItem('theme','light');
+// Intercept non-critical API calls that fail for guest tokens
 (function(){
-  var origFetch = window.fetch;
-  window.fetch = function(url, opts) {
-    var u = typeof url === 'string' ? url : (url && url.url) || '';
-    if (u.includes('feature_flags') || u.includes('language_pack')) {
-      if (u.includes('feature_flags')) {
-        return Promise.resolve(new Response(JSON.stringify({result:{}}),
-          {status:200, headers:{'Content-Type':'application/json'}}));
-      }
-      if (u.includes('language_pack')) {
-        return Promise.resolve(new Response(JSON.stringify({}),
-          {status:200, headers:{'Content-Type':'application/json'}}));
-      }
-    }
-    return origFetch.apply(this, arguments);
+  var _f=window.fetch;
+  window.fetch=function(u,o){
+    var s=(typeof u==='string')?u:(u&&u.url)||'';
+    if(s.indexOf('/feature_flags')!==-1)
+      return Promise.resolve(new Response(JSON.stringify({result:{}}),{status:200,headers:{'Content-Type':'application/json'}}));
+    if(s.indexOf('/language_pack/')!==-1)
+      return Promise.resolve(new Response(JSON.stringify({domain:"superset",locale_data:{superset:{"":{"domain":"superset","lang":"es","plural_forms":"nplurals=2; plural=(n != 1)"}}}}),{status:200,headers:{'Content-Type':'application/json'}}));
+    return _f.apply(this,arguments);
   };
 })();
 </script>"""
 
 def FLASK_APP_MUTATOR(app: Flask):
     @app.after_request
-    def inject_embedded_overrides(response):
+    def inject_embedded_theme(response):
+        # Only on /embedded/ pages
+        if '/embedded/' not in flask_request.path:
+            return response
         if response.content_type and 'text/html' in response.content_type:
             data = response.get_data(as_text=True)
             if '</head>' in data:
-                data = data.replace('</head>', LIGHT_THEME_CSS + SUPPRESS_ERRORS_JS + '</head>')
+                data = data.replace('</head>', EMBEDDED_SCRIPT + '</head>')
                 response.set_data(data)
         return response
