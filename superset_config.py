@@ -38,20 +38,10 @@ WTF_CSRF_ENABLED = False
 TALISMAN_ENABLED = False
 CONTENT_SECURITY_POLICY_WARNING = False
 
-# --- Theming (Ant Design v5 tokens) ---
-# Both themes use transparent background so embedded dashboards blend with parent
-# The parent platform switches between them via SDK setThemeMode('default'/'dark')
-THEME_DEFAULT = {
-    "token": {
-        "colorBgLayout": "transparent",
-    }
-}
-THEME_DARK = {
-    "algorithm": "dark",
-    "token": {
-        "colorBgLayout": "transparent",
-    }
-}
+# --- Theming ---
+# Theme is controlled via CSS injection from the parent platform (postMessage).
+# THEME_DEFAULT/THEME_DARK and setThemeMode are NOT used — they don't work
+# reliably for embedded dashboards (AbortError: Transition was skipped).
 
 # --- Embedded Superset & Guest Tokens ---
 FEATURE_FLAGS = {
@@ -91,8 +81,9 @@ PUBLIC_ROLE_LIKE = "Alpha"
 
 
 # ---------------------------------------------------------------------------
-# Embedded pages: pre-inject feature flags + suppress errors
-# (PR #37367 fix — inject featureFlags before setupPlugins runs)
+# Embedded pages: feature flags + error suppression + CSS theme injection
+# Approach: parent sends CSS via postMessage, script injects <style> tags
+# Based on: https://github.com/apache/superset/issues/32357#issuecomment
 # ---------------------------------------------------------------------------
 EMBEDDED_SCRIPT = """<script>
 // Feature flags — Superset reads window.featureFlags
@@ -105,14 +96,12 @@ window.featureFlags = {
   ENABLE_EXPLORE_DRAG_AND_DROP: true
 };
 
-// Theme: read stored preference (set by parent via postMessage)
-// On first visit defaults to light; after toggle, localStorage has the real value
-var _wantDark = localStorage.getItem('_embedded_theme') === 'dark';
+// Block OS dark mode from leaking into Superset
 (function(){
   var _mm = window.matchMedia;
   window.matchMedia = function(q) {
     if (q === '(prefers-color-scheme: dark)') {
-      return {matches: _wantDark, media: q,
+      return {matches: false, media: q,
         addListener:function(){}, removeListener:function(){},
         addEventListener:function(){}, removeEventListener:function(){},
         dispatchEvent:function(){}};
@@ -121,17 +110,69 @@ var _wantDark = localStorage.getItem('_embedded_theme') === 'dark';
   };
 })();
 
-// Fallback: listen for theme changes from parent via postMessage
-// If setThemeMode via SDK doesn't work, this reloads with the correct theme
-window.addEventListener('message', function(e) {
-  if (e.data && e.data.type === 'setTheme') {
-    var next = e.data.theme === 'dark' ? 'dark' : 'light';
-    if (next !== localStorage.getItem('_embedded_theme')) {
-      localStorage.setItem('_embedded_theme', next);
-      window.location.reload();
+// --- CSS Theme Injection via postMessage ---
+// Parent sends: { type: 'setTheme', theme: 'dark'|'light' }
+// This injects/updates a <style> tag with the appropriate overrides
+(function(){
+  var LIGHT_CSS = [
+    'body, #app, .ant-layout { background: transparent !important; }',
+    '.css-1qfjvvo, .css-12fk19l { background: transparent !important; }',
+    '.dashboard-content { background: transparent !important; }',
+    '.ant-card { background: transparent !important; border-color: transparent !important; box-shadow: none !important; }',
+    '.chart-container { background: transparent !important; }',
+    '.dashboard-component-chart-holder { background: transparent !important; }',
+    '.header-with-actions { background: transparent !important; }',
+    '.ant-tabs-content-holder { background: transparent !important; }',
+    '.filter-bar { background: transparent !important; }'
+  ].join('\\n');
+
+  var DARK_CSS = [
+    'body, #app, .ant-layout { background: transparent !important; color: #e0e0e0 !important; }',
+    '.css-1qfjvvo, .css-12fk19l { background: transparent !important; }',
+    '.dashboard-content { background: transparent !important; }',
+    '.ant-card { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.1) !important; box-shadow: none !important; }',
+    '.chart-container { background: transparent !important; }',
+    '.dashboard-component-chart-holder { background: transparent !important; }',
+    '.header-with-actions { background: transparent !important; color: #e0e0e0 !important; }',
+    '.ant-tabs-content-holder { background: transparent !important; }',
+    '.filter-bar { background: rgba(255,255,255,0.04) !important; }',
+    '.ant-tabs-tab { color: #b0b0b0 !important; }',
+    '.ant-tabs-tab-active .ant-tabs-tab-btn { color: #fff !important; }',
+    '.slice_container { color: #e0e0e0 !important; }',
+    'text, .nv-axis text, .tick text { fill: #b0b0b0 !important; }',
+    '.ant-select-selector { background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.15) !important; color: #e0e0e0 !important; }',
+    '.ant-input { background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.15) !important; color: #e0e0e0 !important; }',
+    'h1,h2,h3,h4,h5,h6,.dashboard-title { color: #f0f0f0 !important; }',
+    '.header-title span { color: #f0f0f0 !important; }',
+    '.number-cell, .cell-text-big { color: #f0f0f0 !important; }',
+    'table, .ant-table { color: #e0e0e0 !important; }',
+    '.ant-table-thead > tr > th { background: rgba(255,255,255,0.06) !important; color: #e0e0e0 !important; border-color: rgba(255,255,255,0.1) !important; }',
+    '.ant-table-tbody > tr > td { border-color: rgba(255,255,255,0.08) !important; }',
+    '.ant-table-tbody > tr:hover > td { background: rgba(255,255,255,0.04) !important; }'
+  ].join('\\n');
+
+  var styleEl = null;
+
+  function applyTheme(theme) {
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'tradeaudit-theme';
+      document.head.appendChild(styleEl);
     }
+    styleEl.textContent = (theme === 'dark') ? DARK_CSS : LIGHT_CSS;
+    localStorage.setItem('_embedded_theme', theme);
   }
-});
+
+  // Apply saved theme immediately (before React renders)
+  applyTheme(localStorage.getItem('_embedded_theme') || 'light');
+
+  // Listen for theme changes from parent
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'setTheme') {
+      applyTheme(e.data.theme === 'dark' ? 'dark' : 'light');
+    }
+  });
+})();
 
 // Intercept non-critical API calls that fail for guest tokens
 (function(){
