@@ -82,13 +82,8 @@ PUBLIC_ROLE_LIKE = "Alpha"
 # (PR #37367 fix — inject featureFlags before setupPlugins runs)
 # ---------------------------------------------------------------------------
 EMBEDDED_SCRIPT = """<style>
-/* Transparent background — blend with parent platform */
-html, body, #app, .dashboard, .css-dashboard,
-[data-test="grid-container"], .grid-container,
-.dashboard-content, .dashboard-grid { background: transparent !important; color-scheme: light; }
-/* Remove chart card borders and shadows */
-.css-dashboard .chart-container, .dashboard-component-chart-holder,
-[data-test="chart-container"] { border: none !important; box-shadow: none !important; }
+/* Prevent dark flash before React renders */
+html, body { color-scheme: light; }
 </style>
 <script>
 // Fix: Superset reads window.featureFlags (NOT window.__superset.featureFlags)
