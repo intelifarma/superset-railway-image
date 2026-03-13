@@ -33,10 +33,10 @@ COPY superset_config.py /app/docker/superset_config.py
 RUN chmod +x ./startup.sh
 RUN chmod +x /app/docker/docker-bootstrap.sh
 
-# Download and compile Spanish translations
+# Download and compile Spanish translations (not included in Docker images since 5.0)
 RUN mkdir -p /app/superset/translations/es/LC_MESSAGES && \
     curl -fsSL "https://raw.githubusercontent.com/apache/superset/master/superset/translations/es/LC_MESSAGES/messages.po" \
       -o /app/superset/translations/es/LC_MESSAGES/messages.po && \
-    pybabel compile -d /app/superset/translations
+    pybabel compile -d /app/superset/translations --use-fuzzy
 
 CMD ["./startup.sh"]
