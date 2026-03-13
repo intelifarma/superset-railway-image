@@ -33,7 +33,12 @@ COPY superset_config.py /app/docker/superset_config.py
 RUN chmod +x ./startup.sh
 RUN chmod +x /app/docker/docker-bootstrap.sh
 
-# Compile translation files for i18n support
-RUN pybabel compile -d /app/superset/translations
+# Download and compile Spanish translations
+RUN pip install babel && \
+    SUPERSET_VERSION=$(python -c "import superset; print(superset.__version__)") && \
+    mkdir -p /app/superset/translations/es/LC_MESSAGES && \
+    curl -fsSL "https://raw.githubusercontent.com/apache/superset/${SUPERSET_VERSION}/superset/translations/es/LC_MESSAGES/messages.po" \
+      -o /app/superset/translations/es/LC_MESSAGES/messages.po && \
+    pybabel compile -d /app/superset/translations
 
 CMD ["./startup.sh"]
