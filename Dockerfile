@@ -34,10 +34,8 @@ RUN chmod +x ./startup.sh
 RUN chmod +x /app/docker/docker-bootstrap.sh
 
 # Download and compile Spanish translations
-RUN pip install babel && \
-    SUPERSET_VERSION=$(python -c "import superset; print(superset.__version__)") && \
-    mkdir -p /app/superset/translations/es/LC_MESSAGES && \
-    curl -fsSL "https://raw.githubusercontent.com/apache/superset/${SUPERSET_VERSION}/superset/translations/es/LC_MESSAGES/messages.po" \
+RUN mkdir -p /app/superset/translations/es/LC_MESSAGES && \
+    curl -fsSL "https://raw.githubusercontent.com/apache/superset/master/superset/translations/es/LC_MESSAGES/messages.po" \
       -o /app/superset/translations/es/LC_MESSAGES/messages.po && \
     pybabel compile -d /app/superset/translations
 
