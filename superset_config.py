@@ -99,14 +99,15 @@ window.featureFlags = {
 };
 
 // matchMedia override: reflect the platform theme instead of OS preference.
-// Dynamic: reads _embedded_theme from localStorage so that after setTheme:'dark' arrives,
-// matchMedia('prefers-color-scheme: dark') returns true — allowing setThemeMode('dark')
-// to complete the React transition without being blocked.
+// Dynamic: reads _embedded_theme from sessionStorage (per-load, not persisted)
+// so that after setTheme:'dark' arrives, matchMedia('prefers-color-scheme: dark')
+// returns true — allowing setThemeMode('dark') to complete without being blocked.
+// sessionStorage resets on each new page load so light mode always starts clean.
 (function(){
   var _mm = window.matchMedia;
   window.matchMedia = function(q) {
     if (q === '(prefers-color-scheme: dark)') {
-      var t = localStorage.getItem('_embedded_theme') || 'light';
+      var t = sessionStorage.getItem('_embedded_theme') || 'light';
       return {matches: t === 'dark', media: q,
         addListener:function(){}, removeListener:function(){},
         addEventListener:function(){}, removeEventListener:function(){},
@@ -116,16 +117,32 @@ window.featureFlags = {
   };
 })();
 
+// Block navigation: prevent users from clicking through to Superset admin pages
+(function(){
+  document.addEventListener('click', function(e) {
+    var a = e.target.closest('a[href]');
+    if (!a) return;
+    var href = a.getAttribute('href') || '';
+    if (href && href !== '#' && !href.startsWith('#')) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true);
+})();
+
 // --- Theme: CSS transparency + Superset native dark mode for ECharts canvas text ---
 // ECharts uses canvas renderer (no SVG text elements) → CSS fill has zero effect.
 // Solution: send Superset's native SELECT_THEME:'dark' so ECharts re-renders with light text.
 // We keep CSS only for background transparency and HTML text color (tables, Big Number, etc.)
 (function(){
   var TRANSPARENT_BG = [
+    'html, body { overflow-x: hidden !important; margin: 0 !important; padding: 0 !important; }',
     'html, body, body > div, body > div > div { background: transparent !important; background-color: transparent !important; }',
     'div[class*="ant-layout"], div[class*="dashboard"], div[class*="grid-container"] { background: transparent !important; }',
     'div[class*="chart-container"], div[class*="tabs-content"] { background: transparent !important; }',
-    'div[data-test], section, main { background: transparent !important; }'
+    'div[data-test], section, main { background: transparent !important; }',
+    'div[class*="dashboard-content"], div[class*="dragdroppable"], div[class*="grid-content"] { padding: 0 !important; margin: 0 !important; }',
+    '::-webkit-scrollbar-corner { display: none !important; }'
   ].join('\\n');
 
   var DARK_OVERRIDE_CSS = [
@@ -153,12 +170,11 @@ window.featureFlags = {
       document.head.appendChild(styleEl);
     }
     styleEl.textContent = (theme === 'dark') ? DARK_OVERRIDE_CSS : LIGHT_OVERRIDE_CSS;
-    localStorage.setItem('_embedded_theme', theme);
+    sessionStorage.setItem('_embedded_theme', theme);
   }
 
-  // Apply transparency immediately
-  var savedTheme = localStorage.getItem('_embedded_theme') || 'light';
-  applyTransparencyCss(savedTheme);
+  // Always start light — parent will send correct theme via setTheme message
+  applyTransparencyCss('light');
 
   window.addEventListener('message', function(e) {
     if (e.data && e.data.type === 'setTheme') {
