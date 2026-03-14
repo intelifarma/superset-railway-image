@@ -195,6 +195,45 @@ window.featureFlags = {
   applyTheme(savedTheme);
   startEnforcing();
 
+  // --- DIAGNOSTICS: log every 3s for 15s to understand what's actually in the DOM ---
+  (function() {
+    var diagCount = 0;
+    var diagInterval = setInterval(function() {
+      diagCount++;
+      if (diagCount > 5) { clearInterval(diagInterval); return; }
+
+      var textNodes = document.querySelectorAll('text, tspan');
+      var sample = [];
+      for (var i = 0; i < Math.min(textNodes.length, 5); i++) {
+        var n = textNodes[i];
+        var computed = window.getComputedStyle(n).fill;
+        var inlineFill = n.style.fill;
+        var attrFill = n.getAttribute('fill');
+        sample.push({
+          tag: n.tagName,
+          text: (n.textContent || '').trim().substring(0, 20),
+          computedFill: computed,
+          inlineFill: inlineFill,
+          attrFill: attrFill,
+          parent: n.parentElement ? n.parentElement.tagName + (n.parentElement.className ? '.' + String(n.parentElement.className).split(' ')[0].substring(0,15) : '') : 'none'
+        });
+      }
+      console.log('[TA-DIAG] t=' + (diagCount*3) + 's | text/tspan count:', textNodes.length, '| samples:', JSON.stringify(sample));
+
+      // Also check for canvas elements (ECharts canvas mode = CSS/JS fill won't work)
+      var canvases = document.querySelectorAll('canvas');
+      if (canvases.length > 0) {
+        console.warn('[TA-DIAG] CANVAS DETECTED:', canvases.length, 'canvas elements — CSS/JS fill has NO effect on canvas text!');
+      }
+
+      // Check for HTML-rendered chart labels (ECharts rich text / HTML labels)
+      var ecLabels = document.querySelectorAll('[class*="echarts-tooltip"], [class*="zrender"], [style*="position:absolute"][style*="z-index"]');
+      if (ecLabels.length > 0) {
+        console.log('[TA-DIAG] HTML overlay elements found:', ecLabels.length);
+      }
+    }, 3000);
+  })();
+
   // Also watch for new SVG subtrees (lazy-rendered charts, tab switches)
   var reapplyTimer = null;
   var observer = new MutationObserver(function(mutations) {
