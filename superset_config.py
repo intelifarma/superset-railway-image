@@ -196,19 +196,43 @@ window.featureFlags = {
     }
     styleEl.textContent = (theme === 'dark') ? DARK_CSS : LIGHT_CSS;
     localStorage.setItem('_embedded_theme', theme);
-    console.log('[TradeAudit] Style tag injected, length:', styleEl.textContent.length, 'theme:', theme);
   }
 
   // Apply saved theme immediately (before React renders)
   var savedTheme = localStorage.getItem('_embedded_theme') || 'light';
-  console.log('[TradeAudit] Applying saved theme:', savedTheme);
   applyTheme(savedTheme);
+
+  // Re-apply after React/ECharts renders chart labels (which appear after initial render)
+  var reapplyTimer = null;
+  function scheduleReapply() {
+    if (reapplyTimer) return;
+    reapplyTimer = setTimeout(function() {
+      reapplyTimer = null;
+      var t = localStorage.getItem('_embedded_theme') || 'light';
+      applyTheme(t);
+    }, 300);
+  }
+
+  // Watch for SVG text elements added by ECharts after initial render
+  var svgObserver = new MutationObserver(function(mutations) {
+    for (var i = 0; i < mutations.length; i++) {
+      for (var j = 0; j < mutations[i].addedNodes.length; j++) {
+        var node = mutations[i].addedNodes[j];
+        if (node.nodeName === 'text' || node.nodeName === 'tspan' ||
+            (node.querySelectorAll && node.querySelectorAll('text, tspan').length > 0)) {
+          scheduleReapply();
+          break;
+        }
+      }
+    }
+  });
+  document.addEventListener('DOMContentLoaded', function() {
+    svgObserver.observe(document.body, { childList: true, subtree: true });
+  });
 
   // Listen for theme changes from parent
   window.addEventListener('message', function(e) {
-    console.log('[TradeAudit] postMessage received:', e.data);
     if (e.data && e.data.type === 'setTheme') {
-      console.log('[TradeAudit] Switching theme to:', e.data.theme);
       applyTheme(e.data.theme === 'dark' ? 'dark' : 'light');
     }
   });
