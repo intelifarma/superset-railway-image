@@ -124,14 +124,12 @@ window.featureFlags = {
     'div[data-test], section, main { background: transparent !important; }'
   ].join('\\n');
 
-  // In dark mode Superset sets dark backgrounds — we override back to transparent.
-  // HTML text color is handled by Superset's own dark theme (correct colors per component).
   var DARK_OVERRIDE_CSS = [
     ':root { color-scheme: normal !important; }',
     TRANSPARENT_BG,
     'div[class*="filter-bar"] { background: rgba(255,255,255,0.04) !important; }',
     'div[class*="Header"] { background: transparent !important; }',
-    // Superset dark theme sets correct text colors; we only reinforce for elements it misses
+    '* { color: #e0e0e0 !important; }',
     'canvas { background: transparent !important; }'
   ].join('\\n');
 
