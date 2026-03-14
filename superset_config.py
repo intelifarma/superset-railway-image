@@ -98,11 +98,17 @@ window.featureFlags = {
   ENABLE_EXPLORE_DRAG_AND_DROP: true
 };
 
+// Request the correct theme from the parent IMMEDIATELY — before React boots.
+// The parent responds with setTheme which sets sessionStorage._embedded_theme.
+// matchMedia reads sessionStorage, so React's ThemeProvider gets the right value on init.
+// This round-trip is virtually instant (<1ms same-process), React init takes ~50-200ms.
+if (window.parent !== window) {
+  window.parent.postMessage({ type: 'requestTheme' }, '*');
+}
+
 // matchMedia override: reflect the platform theme instead of OS preference.
-// Dynamic: reads _embedded_theme from sessionStorage (per-load, not persisted)
-// so that after setTheme:'dark' arrives, matchMedia('prefers-color-scheme: dark')
-// returns true — allowing setThemeMode('dark') to complete without being blocked.
-// sessionStorage resets on each new page load so light mode always starts clean.
+// Reads _embedded_theme from sessionStorage (set by the requestTheme response above
+// and by subsequent setTheme messages). sessionStorage resets per page load.
 (function(){
   var _mm = window.matchMedia;
   window.matchMedia = function(q) {
@@ -117,17 +123,38 @@ window.featureFlags = {
   };
 })();
 
-// Block navigation: prevent users from clicking through to Superset admin pages
+// Block ALL navigation out of the embedded iframe
 (function(){
+  // 1. Block <a> link clicks
   document.addEventListener('click', function(e) {
     var a = e.target.closest('a[href]');
     if (!a) return;
     var href = a.getAttribute('href') || '';
-    if (href && href !== '#' && !href.startsWith('#')) {
+    if (href !== '#' && !href.startsWith('#')) {
       e.preventDefault();
       e.stopPropagation();
     }
   }, true);
+
+  // 2. Block window.open (ctrl+click, target="_blank")
+  window.open = function() { return null; };
+
+  // 3. Block location.assign / replace
+  try { window.location.assign = function() {}; } catch(e) {}
+  try { window.location.replace = function() {}; } catch(e) {}
+
+  // 4. Block location.href setter except hash navigation
+  try {
+    var locDesc = Object.getOwnPropertyDescriptor(Location.prototype, 'href');
+    if (locDesc && locDesc.set) {
+      Object.defineProperty(Location.prototype, 'href', {
+        get: locDesc.get,
+        set: function(v) {
+          if (typeof v === 'string' && v.startsWith('#')) locDesc.set.call(this, v);
+        }
+      });
+    }
+  } catch(e) {}
 })();
 
 // --- Theme: CSS transparency + Superset native dark mode for ECharts canvas text ---
