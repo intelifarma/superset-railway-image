@@ -160,14 +160,10 @@ window.featureFlags = {
   var savedTheme = localStorage.getItem('_embedded_theme') || 'light';
   applyTransparencyCss(savedTheme);
 
-  // Listen for theme from parent platform
   window.addEventListener('message', function(e) {
-    console.log('[TA-MSG] received:', JSON.stringify(e.data), 'origin:', e.origin);
     if (e.data && e.data.type === 'setTheme') {
       applyTransparencyCss(e.data.theme === 'dark' ? 'dark' : 'light');
     }
-    // Superset's own SELECT_THEME is handled natively by Superset's React app —
-    // no extra code needed here.
   });
 })();
 
