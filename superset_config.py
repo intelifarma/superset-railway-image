@@ -98,12 +98,16 @@ window.featureFlags = {
   ENABLE_EXPLORE_DRAG_AND_DROP: true
 };
 
-// Block OS dark mode from leaking into Superset
+// matchMedia override: reflect the platform theme instead of OS preference.
+// Dynamic: reads _embedded_theme from localStorage so that after setTheme:'dark' arrives,
+// matchMedia('prefers-color-scheme: dark') returns true — allowing setThemeMode('dark')
+// to complete the React transition without being blocked.
 (function(){
   var _mm = window.matchMedia;
   window.matchMedia = function(q) {
     if (q === '(prefers-color-scheme: dark)') {
-      return {matches: false, media: q,
+      var t = localStorage.getItem('_embedded_theme') || 'light';
+      return {matches: t === 'dark', media: q,
         addListener:function(){}, removeListener:function(){},
         addEventListener:function(){}, removeEventListener:function(){},
         dispatchEvent:function(){}};
