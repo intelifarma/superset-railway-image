@@ -147,8 +147,10 @@ window.featureFlags = {
     'section { background: transparent !important; }',
     'main { background: transparent !important; }',
     '* { color: #e0e0e0 !important; }',
-    'text, tspan { fill: #c0c0c0 !important; }',
-    'svg text { fill: #c0c0c0 !important; }',
+    'text, tspan, text *, tspan * { fill: #c0c0c0 !important; color: #c0c0c0 !important; }',
+    'svg text, svg tspan, svg text tspan { fill: #c0c0c0 !important; }',
+    'g text, g tspan { fill: #c0c0c0 !important; }',
+    '[class*="ec-extension"] text, [class*="zr-"] text { fill: #c0c0c0 !important; }',
     '.header-title, .header-title span, [class*="header-title"] { color: #ffffff !important; }',
     '[class*="big_number"], [class*="BigNumber"], [class*="number"] { color: #ffffff !important; }',
     'div[class*="slice_container"] * { color: #e0e0e0 !important; }',
@@ -198,42 +200,62 @@ window.featureFlags = {
     localStorage.setItem('_embedded_theme', theme);
   }
 
-  // Apply saved theme immediately (before React renders)
+  // Apply saved theme immediately (before React renders) + schedule re-applies for ECharts
   var savedTheme = localStorage.getItem('_embedded_theme') || 'light';
   applyTheme(savedTheme);
+  scheduleReapplies();
 
-  // Re-apply after React/ECharts renders chart labels (which appear after initial render)
+  // Re-apply at multiple intervals to catch ECharts renders at any timing
+  function scheduleReapplies() {
+    var delays = [300, 800, 1500, 3000, 5000, 8000];
+    delays.forEach(function(d) {
+      setTimeout(function() {
+        var t = localStorage.getItem('_embedded_theme') || 'light';
+        applyTheme(t);
+      }, d);
+    });
+  }
+
+  // Watch for SVG text nodes added OR attributes changed by ECharts
   var reapplyTimer = null;
-  function scheduleReapply() {
+  var svgObserver = new MutationObserver(function(mutations) {
+    var needsReapply = false;
+    for (var i = 0; i < mutations.length; i++) {
+      var m = mutations[i];
+      if (m.type === 'attributes' && (m.attributeName === 'fill' || m.attributeName === 'style')) {
+        needsReapply = true; break;
+      }
+      if (m.type === 'childList') {
+        for (var j = 0; j < m.addedNodes.length; j++) {
+          var node = m.addedNodes[j];
+          if (node.nodeName === 'text' || node.nodeName === 'tspan' || node.nodeName === 'svg' ||
+              (node.querySelectorAll && node.querySelectorAll('text, tspan').length > 0)) {
+            needsReapply = true; break;
+          }
+        }
+      }
+      if (needsReapply) break;
+    }
+    if (!needsReapply) return;
     if (reapplyTimer) return;
     reapplyTimer = setTimeout(function() {
       reapplyTimer = null;
       var t = localStorage.getItem('_embedded_theme') || 'light';
       applyTheme(t);
-    }, 300);
-  }
-
-  // Watch for SVG text elements added by ECharts after initial render
-  var svgObserver = new MutationObserver(function(mutations) {
-    for (var i = 0; i < mutations.length; i++) {
-      for (var j = 0; j < mutations[i].addedNodes.length; j++) {
-        var node = mutations[i].addedNodes[j];
-        if (node.nodeName === 'text' || node.nodeName === 'tspan' ||
-            (node.querySelectorAll && node.querySelectorAll('text, tspan').length > 0)) {
-          scheduleReapply();
-          break;
-        }
-      }
-    }
+    }, 150);
   });
   document.addEventListener('DOMContentLoaded', function() {
-    svgObserver.observe(document.body, { childList: true, subtree: true });
+    svgObserver.observe(document.body, {
+      childList: true, subtree: true,
+      attributes: true, attributeFilter: ['fill', 'style']
+    });
   });
 
-  // Listen for theme changes from parent
+  // Listen for theme changes from parent — apply immediately + re-apply as ECharts re-renders
   window.addEventListener('message', function(e) {
     if (e.data && e.data.type === 'setTheme') {
       applyTheme(e.data.theme === 'dark' ? 'dark' : 'light');
+      scheduleReapplies();
     }
   });
 })();
