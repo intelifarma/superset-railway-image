@@ -158,6 +158,7 @@ window.featureFlags = {
 
   // Listen for theme from parent platform
   window.addEventListener('message', function(e) {
+    console.log('[TA-MSG] received:', JSON.stringify(e.data), 'origin:', e.origin);
     if (e.data && e.data.type === 'setTheme') {
       applyTransparencyCss(e.data.theme === 'dark' ? 'dark' : 'light');
     }
