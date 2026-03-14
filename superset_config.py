@@ -163,12 +163,15 @@ window.featureFlags = {
     applyingSvgFill(theme);
   }
 
+  var SVG_FILL_DARK  = '#e8e8e8';
+  var SVG_FILL_LIGHT = null; // remove forced fill → ECharts uses its own colors
+
   function applyingSvgFill(theme) {
     applyingFill = true;
     var nodes = document.querySelectorAll('text, tspan');
     for (var i = 0; i < nodes.length; i++) {
       if (theme === 'dark') {
-        nodes[i].style.setProperty('fill', '#c0c0c0', 'important');
+        nodes[i].style.setProperty('fill', SVG_FILL_DARK, 'important');
       } else {
         nodes[i].style.removeProperty('fill');
       }
@@ -176,19 +179,23 @@ window.featureFlags = {
     applyingFill = false;
   }
 
-  // Apply immediately + at escalating intervals so we always catch ECharts render timing
-  function scheduleReapplies() {
-    [200, 600, 1200, 2500, 4500, 8000].forEach(function(d) {
-      setTimeout(function() { applyTheme(localStorage.getItem('_embedded_theme') || 'light'); }, d);
-    });
+  // Persistent enforcement: ECharts may update existing text nodes (not add new ones),
+  // so attribute-watching causes loops. Instead, run every 500ms for 25s after load/theme-change.
+  var enforceInterval = null;
+  function startEnforcing() {
+    if (enforceInterval) clearInterval(enforceInterval);
+    var ticks = 0;
+    enforceInterval = setInterval(function() {
+      applyingSvgFill(localStorage.getItem('_embedded_theme') || 'light');
+      if (++ticks >= 50) { clearInterval(enforceInterval); enforceInterval = null; } // 50×500ms=25s
+    }, 500);
   }
 
   var savedTheme = localStorage.getItem('_embedded_theme') || 'light';
   applyTheme(savedTheme);
-  scheduleReapplies();
+  startEnforcing();
 
-  // Watch only for new nodes (childList). When ECharts adds a new SVG/chart, re-run applyTheme.
-  // We do NOT watch attribute changes — that causes infinite loops when we set fill ourselves.
+  // Also watch for new SVG subtrees (lazy-rendered charts, tab switches)
   var reapplyTimer = null;
   var observer = new MutationObserver(function(mutations) {
     if (applyingFill) return;
@@ -196,15 +203,15 @@ window.featureFlags = {
       var added = mutations[i].addedNodes;
       for (var j = 0; j < added.length; j++) {
         var n = added[j];
-        if (n.nodeName === 'svg' || n.nodeName === 'text' || n.nodeName === 'tspan' ||
+        if (n.nodeName === 'svg' ||
             (n.querySelectorAll && n.querySelectorAll('text, tspan').length > 0)) {
           if (!reapplyTimer) {
             reapplyTimer = setTimeout(function() {
               reapplyTimer = null;
-              applyTheme(localStorage.getItem('_embedded_theme') || 'light');
-            }, 100);
+              applyingSvgFill(localStorage.getItem('_embedded_theme') || 'light');
+            }, 80);
           }
-          return; // one timer per batch is enough
+          return;
         }
       }
     }
@@ -216,7 +223,7 @@ window.featureFlags = {
   window.addEventListener('message', function(e) {
     if (e.data && e.data.type === 'setTheme') {
       applyTheme(e.data.theme === 'dark' ? 'dark' : 'light');
-      scheduleReapplies();
+      startEnforcing(); // restart 25s enforcement window on theme change
     }
   });
 })();
