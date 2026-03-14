@@ -76,8 +76,10 @@ HTTP_HEADERS = {
 SESSION_COOKIE_SAMESITE = "None"
 SESSION_COOKIE_SECURE = True
 
-# Public role gets Alpha permissions (full read access to all datasources/charts)
-PUBLIC_ROLE_LIKE = "Alpha"
+# Do NOT set PUBLIC_ROLE_LIKE — anonymous direct access to Superset shows nothing/login.
+# The "Public" role is used for guest tokens (GUEST_ROLE_NAME = "Public").
+# Grant permissions to that role manually in Superset admin:
+# Admin → Security → List Roles → Public → add only the datasource/chart rows needed.
 
 
 # ---------------------------------------------------------------------------
