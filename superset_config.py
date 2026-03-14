@@ -114,82 +114,44 @@ window.featureFlags = {
 
 // --- CSS Theme Injection via postMessage ---
 // Parent sends: { type: 'setTheme', theme: 'dark'|'light' }
-// This injects/updates a <style> tag with the appropriate overrides
+// Strategy:
+//   HTML text  → CSS  "* { color: #e0e0e0 !important }"  (covers tables, Big Number, labels)
+//   SVG text   → JS   style.setProperty('fill', color, 'important') on every text/tspan
+//                     CSS fill !important alone loses the race against ECharts re-renders
+// Anti-loop:  the MutationObserver only watches childList (new nodes), NOT attribute changes,
+//             so our own setProperty calls never re-trigger it.
 (function(){
-  // Nuclear approach: override ALL divs background, then refine
-  // #app may not exist in embedded mode, so use body > div chain
+  var TRANSPARENT_BG = [
+    'html, body, body > div, body > div > div { background: transparent !important; background-color: transparent !important; }',
+    'div[class*="ant-layout"], div[class*="dashboard"], div[class*="grid-container"] { background: transparent !important; }',
+    'div[class*="chart-container"], div[class*="tabs-content"] { background: transparent !important; }',
+    'div[data-test], section, main { background: transparent !important; }'
+  ].join('\\n');
+
   var LIGHT_CSS = [
     ':root { color-scheme: normal !important; }',
-    'html, body, body > div, body > div > div, body > div > div > div, body > div > div > div > div { background: transparent !important; background-color: transparent !important; }',
-    'div[class*="ant-layout"] { background: transparent !important; }',
-    'div[class*="dashboard"] { background: transparent !important; }',
-    'div[class*="grid-container"] { background: transparent !important; }',
-    'div[class*="chart-container"] { background: transparent !important; }',
-    'div[class*="filter-bar"] { background: transparent !important; }',
-    'div[class*="Header"] { background: transparent !important; }',
-    'div[class*="tabs-content"] { background: transparent !important; }',
-    'div[data-test] { background: transparent !important; }',
-    'section { background: transparent !important; }',
-    'main { background: transparent !important; }'
+    TRANSPARENT_BG,
+    'div[class*="filter-bar"], div[class*="Header"] { background: transparent !important; }'
   ].join('\\n');
 
   var DARK_CSS = [
     ':root { color-scheme: normal !important; }',
-    'html, body, body > div, body > div > div, body > div > div > div, body > div > div > div > div { background: transparent !important; background-color: transparent !important; color: #e0e0e0 !important; }',
-    'div[class*="ant-layout"] { background: transparent !important; }',
-    'div[class*="dashboard"] { background: transparent !important; }',
-    'div[class*="grid-container"] { background: transparent !important; }',
-    'div[class*="chart-container"] { background: transparent !important; }',
+    TRANSPARENT_BG,
     'div[class*="filter-bar"] { background: rgba(255,255,255,0.04) !important; }',
-    'div[class*="Header"] { background: transparent !important; color: #e0e0e0 !important; }',
-    'div[class*="tabs-content"] { background: transparent !important; }',
-    'div[data-test] { background: transparent !important; }',
-    'section { background: transparent !important; }',
-    'main { background: transparent !important; }',
+    'div[class*="Header"] { background: transparent !important; }',
+    // HTML text — covers every element: tables, Big Number, labels, tooltips, inputs
     '* { color: #e0e0e0 !important; }',
-    'text, tspan, text *, tspan * { fill: #c0c0c0 !important; color: #c0c0c0 !important; }',
-    'svg text, svg tspan, svg text tspan { fill: #c0c0c0 !important; }',
-    'g text, g tspan { fill: #c0c0c0 !important; }',
-    '[class*="ec-extension"] text, [class*="zr-"] text { fill: #c0c0c0 !important; }',
-    '.header-title, .header-title span, [class*="header-title"] { color: #ffffff !important; }',
-    '[class*="big_number"], [class*="BigNumber"], [class*="number"] { color: #ffffff !important; }',
-    'div[class*="slice_container"] * { color: #e0e0e0 !important; }',
-    'input, select, textarea { background: rgba(255,255,255,0.08) !important; color: #e0e0e0 !important; border-color: rgba(255,255,255,0.15) !important; }',
-    'table { color: #e0e0e0 !important; }',
+    'input, select, textarea { background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.15) !important; }',
     'th { background: rgba(255,255,255,0.06) !important; }',
     'tr:hover td { background: rgba(255,255,255,0.04) !important; }',
     'a { color: #8ab4f8 !important; }',
-    '[class*="tooltip"] { background: #1e1e2e !important; color: #e0e0e0 !important; }'
+    '[class*="tooltip"] { background: #1e1e2e !important; }'
   ].join('\\n');
 
-  // Debug: dump DOM structure after React renders
-  setTimeout(function() {
-    var el = document.body;
-    var path = [];
-    var current = el ? el.firstElementChild : null;
-    for (var i = 0; i < 8 && current; i++) {
-      var id = current.id ? '#' + current.id : '';
-      var cls = current.className ? '.' + String(current.className).split(' ')[0].substring(0, 20) : '';
-      var bg = window.getComputedStyle(current).backgroundColor;
-      path.push(current.tagName + id + cls + ' [bg:' + bg + ']');
-      current = current.firstElementChild;
-    }
-    console.log('[TradeAudit] DOM structure:', path.join(' > '));
-    // Also find all elements with non-transparent background
-    var allBg = document.querySelectorAll('*');
-    var grays = [];
-    for (var j = 0; j < allBg.length && grays.length < 10; j++) {
-      var bgc = window.getComputedStyle(allBg[j]).backgroundColor;
-      if (bgc && bgc !== 'rgba(0, 0, 0, 0)' && bgc !== 'transparent') {
-        var tag = allBg[j].tagName + (allBg[j].id ? '#' + allBg[j].id : '') + (allBg[j].className ? '.' + String(allBg[j].className).split(' ')[0].substring(0, 25) : '');
-        grays.push(tag + ' → ' + bgc);
-      }
-    }
-    console.log('[TradeAudit] Elements with background:', grays);
-  }, 5000);
-
   var styleEl = null;
+  var applyingFill = false; // guard: prevents our own setProperty from re-triggering observer
 
+  // Apply CSS (HTML) + JS fill override (SVG). Covers every chart type globally.
   function applyTheme(theme) {
     if (!styleEl) {
       styleEl = document.createElement('style');
@@ -198,60 +160,59 @@ window.featureFlags = {
     }
     styleEl.textContent = (theme === 'dark') ? DARK_CSS : LIGHT_CSS;
     localStorage.setItem('_embedded_theme', theme);
+    applyingSvgFill(theme);
   }
 
-  // Apply saved theme immediately (before React renders) + schedule re-applies for ECharts
+  function applyingSvgFill(theme) {
+    applyingFill = true;
+    var nodes = document.querySelectorAll('text, tspan');
+    for (var i = 0; i < nodes.length; i++) {
+      if (theme === 'dark') {
+        nodes[i].style.setProperty('fill', '#c0c0c0', 'important');
+      } else {
+        nodes[i].style.removeProperty('fill');
+      }
+    }
+    applyingFill = false;
+  }
+
+  // Apply immediately + at escalating intervals so we always catch ECharts render timing
+  function scheduleReapplies() {
+    [200, 600, 1200, 2500, 4500, 8000].forEach(function(d) {
+      setTimeout(function() { applyTheme(localStorage.getItem('_embedded_theme') || 'light'); }, d);
+    });
+  }
+
   var savedTheme = localStorage.getItem('_embedded_theme') || 'light';
   applyTheme(savedTheme);
   scheduleReapplies();
 
-  // Re-apply at multiple intervals to catch ECharts renders at any timing
-  function scheduleReapplies() {
-    var delays = [300, 800, 1500, 3000, 5000, 8000];
-    delays.forEach(function(d) {
-      setTimeout(function() {
-        var t = localStorage.getItem('_embedded_theme') || 'light';
-        applyTheme(t);
-      }, d);
-    });
-  }
-
-  // Watch for SVG text nodes added OR attributes changed by ECharts
+  // Watch only for new nodes (childList). When ECharts adds a new SVG/chart, re-run applyTheme.
+  // We do NOT watch attribute changes — that causes infinite loops when we set fill ourselves.
   var reapplyTimer = null;
-  var svgObserver = new MutationObserver(function(mutations) {
-    var needsReapply = false;
+  var observer = new MutationObserver(function(mutations) {
+    if (applyingFill) return;
     for (var i = 0; i < mutations.length; i++) {
-      var m = mutations[i];
-      if (m.type === 'attributes' && (m.attributeName === 'fill' || m.attributeName === 'style')) {
-        needsReapply = true; break;
-      }
-      if (m.type === 'childList') {
-        for (var j = 0; j < m.addedNodes.length; j++) {
-          var node = m.addedNodes[j];
-          if (node.nodeName === 'text' || node.nodeName === 'tspan' || node.nodeName === 'svg' ||
-              (node.querySelectorAll && node.querySelectorAll('text, tspan').length > 0)) {
-            needsReapply = true; break;
+      var added = mutations[i].addedNodes;
+      for (var j = 0; j < added.length; j++) {
+        var n = added[j];
+        if (n.nodeName === 'svg' || n.nodeName === 'text' || n.nodeName === 'tspan' ||
+            (n.querySelectorAll && n.querySelectorAll('text, tspan').length > 0)) {
+          if (!reapplyTimer) {
+            reapplyTimer = setTimeout(function() {
+              reapplyTimer = null;
+              applyTheme(localStorage.getItem('_embedded_theme') || 'light');
+            }, 100);
           }
+          return; // one timer per batch is enough
         }
       }
-      if (needsReapply) break;
     }
-    if (!needsReapply) return;
-    if (reapplyTimer) return;
-    reapplyTimer = setTimeout(function() {
-      reapplyTimer = null;
-      var t = localStorage.getItem('_embedded_theme') || 'light';
-      applyTheme(t);
-    }, 150);
   });
   document.addEventListener('DOMContentLoaded', function() {
-    svgObserver.observe(document.body, {
-      childList: true, subtree: true,
-      attributes: true, attributeFilter: ['fill', 'style']
-    });
+    observer.observe(document.body, { childList: true, subtree: true });
   });
 
-  // Listen for theme changes from parent — apply immediately + re-apply as ECharts re-renders
   window.addEventListener('message', function(e) {
     if (e.data && e.data.type === 'setTheme') {
       applyTheme(e.data.theme === 'dark' ? 'dark' : 'light');
