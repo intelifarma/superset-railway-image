@@ -214,6 +214,71 @@ window.featureFlags = {
   });
 })();
 
+// Translate hardcoded English strings in React components
+(function(){
+  var TRANSLATIONS = {
+    'No results were returned for this query': 'No hay datos para mostrar',
+    'There is currently no information to display.': 'No hay información disponible.',
+    'No data': 'Sin datos',
+    'Loading...': 'Cargando...',
+    'No Results': 'Sin resultados',
+    'An error occurred while loading this chart.': 'Ocurrió un error al cargar este gráfico.',
+    'Try again': 'Reintentar',
+    'Force refresh': 'Forzar actualización',
+    'Edit chart': 'Editar gráfico',
+    'View query': 'Ver consulta',
+    'Download': 'Descargar',
+    'Share': 'Compartir',
+    'rows': 'filas',
+    'row': 'fila',
+    'Rows per page': 'Filas por página',
+    'of': 'de',
+    'Search': 'Buscar',
+    'Reset': 'Restablecer',
+    'Apply': 'Aplicar',
+    'Filter': 'Filtrar',
+    'Filters': 'Filtros',
+    'Add filter': 'Agregar filtro',
+    'Clear all': 'Limpiar todo',
+    'Select value': 'Seleccionar valor',
+    'All': 'Todos'
+  };
+
+  function translateNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      var text = node.textContent.trim();
+      if (TRANSLATIONS[text]) {
+        node.textContent = node.textContent.replace(text, TRANSLATIONS[text]);
+      }
+    }
+  }
+
+  function translateTree(root) {
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+    var node;
+    while ((node = walker.nextNode())) {
+      translateNode(node);
+    }
+  }
+
+  var observer = new MutationObserver(function(mutations) {
+    mutations.forEach(function(mutation) {
+      mutation.addedNodes.forEach(function(node) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          translateTree(node);
+        } else {
+          translateNode(node);
+        }
+      });
+    });
+  });
+
+  document.addEventListener('DOMContentLoaded', function() {
+    translateTree(document.body);
+    observer.observe(document.body, { childList: true, subtree: true });
+  });
+})();
+
 // Intercept non-critical API calls that fail for guest tokens
 (function(){
   var _f = window.fetch;
