@@ -112,14 +112,10 @@ window.featureFlags = {
   };
 })();
 
-// --- CSS Theme Injection via postMessage ---
-// Parent sends: { type: 'setTheme', theme: 'dark'|'light' }
-// Strategy:
-//   HTML text  → CSS  "* { color: #e0e0e0 !important }"  (covers tables, Big Number, labels)
-//   SVG text   → JS   style.setProperty('fill', color, 'important') on every text/tspan
-//                     CSS fill !important alone loses the race against ECharts re-renders
-// Anti-loop:  the MutationObserver only watches childList (new nodes), NOT attribute changes,
-//             so our own setProperty calls never re-trigger it.
+// --- Theme: CSS transparency + Superset native dark mode for ECharts canvas text ---
+// ECharts uses canvas renderer (no SVG text elements) → CSS fill has zero effect.
+// Solution: send Superset's native SELECT_THEME:'dark' so ECharts re-renders with light text.
+// We keep CSS only for background transparency and HTML text color (tables, Big Number, etc.)
 (function(){
   var TRANSPARENT_BG = [
     'html, body, body > div, body > div > div { background: transparent !important; background-color: transparent !important; }',
@@ -128,142 +124,47 @@ window.featureFlags = {
     'div[data-test], section, main { background: transparent !important; }'
   ].join('\\n');
 
-  var LIGHT_CSS = [
-    ':root { color-scheme: normal !important; }',
-    TRANSPARENT_BG,
-    'div[class*="filter-bar"], div[class*="Header"] { background: transparent !important; }'
-  ].join('\\n');
-
-  var DARK_CSS = [
+  // In dark mode Superset sets dark backgrounds — we override back to transparent.
+  // HTML text color is handled by Superset's own dark theme (correct colors per component).
+  var DARK_OVERRIDE_CSS = [
     ':root { color-scheme: normal !important; }',
     TRANSPARENT_BG,
     'div[class*="filter-bar"] { background: rgba(255,255,255,0.04) !important; }',
     'div[class*="Header"] { background: transparent !important; }',
-    // HTML text — covers every element: tables, Big Number, labels, tooltips, inputs
-    '* { color: #e0e0e0 !important; }',
-    'input, select, textarea { background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.15) !important; }',
-    'th { background: rgba(255,255,255,0.06) !important; }',
-    'tr:hover td { background: rgba(255,255,255,0.04) !important; }',
-    'a { color: #8ab4f8 !important; }',
-    '[class*="tooltip"] { background: #1e1e2e !important; }'
+    // Superset dark theme sets correct text colors; we only reinforce for elements it misses
+    'canvas { background: transparent !important; }'
+  ].join('\\n');
+
+  var LIGHT_OVERRIDE_CSS = [
+    ':root { color-scheme: normal !important; }',
+    TRANSPARENT_BG,
+    'div[class*="filter-bar"], div[class*="Header"] { background: transparent !important; }',
+    'canvas { background: transparent !important; }'
   ].join('\\n');
 
   var styleEl = null;
-  var applyingFill = false; // guard: prevents our own setProperty from re-triggering observer
 
-  // Apply CSS (HTML) + JS fill override (SVG). Covers every chart type globally.
-  function applyTheme(theme) {
+  function applyTransparencyCss(theme) {
     if (!styleEl) {
       styleEl = document.createElement('style');
       styleEl.id = 'tradeaudit-theme';
       document.head.appendChild(styleEl);
     }
-    styleEl.textContent = (theme === 'dark') ? DARK_CSS : LIGHT_CSS;
+    styleEl.textContent = (theme === 'dark') ? DARK_OVERRIDE_CSS : LIGHT_OVERRIDE_CSS;
     localStorage.setItem('_embedded_theme', theme);
-    applyingSvgFill(theme);
   }
 
-  var SVG_FILL_DARK  = '#e8e8e8';
-  var SVG_FILL_LIGHT = null; // remove forced fill → ECharts uses its own colors
-
-  function applyingSvgFill(theme) {
-    applyingFill = true;
-    var nodes = document.querySelectorAll('text, tspan');
-    for (var i = 0; i < nodes.length; i++) {
-      if (theme === 'dark') {
-        nodes[i].style.setProperty('fill', SVG_FILL_DARK, 'important');
-      } else {
-        nodes[i].style.removeProperty('fill');
-      }
-    }
-    applyingFill = false;
-  }
-
-  // Persistent enforcement: ECharts may update existing text nodes (not add new ones),
-  // so attribute-watching causes loops. Instead, run every 500ms for 25s after load/theme-change.
-  var enforceInterval = null;
-  function startEnforcing() {
-    if (enforceInterval) clearInterval(enforceInterval);
-    var ticks = 0;
-    enforceInterval = setInterval(function() {
-      applyingSvgFill(localStorage.getItem('_embedded_theme') || 'light');
-      if (++ticks >= 50) { clearInterval(enforceInterval); enforceInterval = null; } // 50×500ms=25s
-    }, 500);
-  }
-
+  // Apply transparency immediately
   var savedTheme = localStorage.getItem('_embedded_theme') || 'light';
-  applyTheme(savedTheme);
-  startEnforcing();
+  applyTransparencyCss(savedTheme);
 
-  // --- DIAGNOSTICS: log every 3s for 15s to understand what's actually in the DOM ---
-  (function() {
-    var diagCount = 0;
-    var diagInterval = setInterval(function() {
-      diagCount++;
-      if (diagCount > 5) { clearInterval(diagInterval); return; }
-
-      var textNodes = document.querySelectorAll('text, tspan');
-      var sample = [];
-      for (var i = 0; i < Math.min(textNodes.length, 5); i++) {
-        var n = textNodes[i];
-        var computed = window.getComputedStyle(n).fill;
-        var inlineFill = n.style.fill;
-        var attrFill = n.getAttribute('fill');
-        sample.push({
-          tag: n.tagName,
-          text: (n.textContent || '').trim().substring(0, 20),
-          computedFill: computed,
-          inlineFill: inlineFill,
-          attrFill: attrFill,
-          parent: n.parentElement ? n.parentElement.tagName + (n.parentElement.className ? '.' + String(n.parentElement.className).split(' ')[0].substring(0,15) : '') : 'none'
-        });
-      }
-      console.log('[TA-DIAG] t=' + (diagCount*3) + 's | text/tspan count:', textNodes.length, '| samples:', JSON.stringify(sample));
-
-      // Also check for canvas elements (ECharts canvas mode = CSS/JS fill won't work)
-      var canvases = document.querySelectorAll('canvas');
-      if (canvases.length > 0) {
-        console.warn('[TA-DIAG] CANVAS DETECTED:', canvases.length, 'canvas elements — CSS/JS fill has NO effect on canvas text!');
-      }
-
-      // Check for HTML-rendered chart labels (ECharts rich text / HTML labels)
-      var ecLabels = document.querySelectorAll('[class*="echarts-tooltip"], [class*="zrender"], [style*="position:absolute"][style*="z-index"]');
-      if (ecLabels.length > 0) {
-        console.log('[TA-DIAG] HTML overlay elements found:', ecLabels.length);
-      }
-    }, 3000);
-  })();
-
-  // Also watch for new SVG subtrees (lazy-rendered charts, tab switches)
-  var reapplyTimer = null;
-  var observer = new MutationObserver(function(mutations) {
-    if (applyingFill) return;
-    for (var i = 0; i < mutations.length; i++) {
-      var added = mutations[i].addedNodes;
-      for (var j = 0; j < added.length; j++) {
-        var n = added[j];
-        if (n.nodeName === 'svg' ||
-            (n.querySelectorAll && n.querySelectorAll('text, tspan').length > 0)) {
-          if (!reapplyTimer) {
-            reapplyTimer = setTimeout(function() {
-              reapplyTimer = null;
-              applyingSvgFill(localStorage.getItem('_embedded_theme') || 'light');
-            }, 80);
-          }
-          return;
-        }
-      }
-    }
-  });
-  document.addEventListener('DOMContentLoaded', function() {
-    observer.observe(document.body, { childList: true, subtree: true });
-  });
-
+  // Listen for theme from parent platform
   window.addEventListener('message', function(e) {
     if (e.data && e.data.type === 'setTheme') {
-      applyTheme(e.data.theme === 'dark' ? 'dark' : 'light');
-      startEnforcing(); // restart 25s enforcement window on theme change
+      applyTransparencyCss(e.data.theme === 'dark' ? 'dark' : 'light');
     }
+    // Superset's own SELECT_THEME is handled natively by Superset's React app —
+    // no extra code needed here.
   });
 })();
 
