@@ -104,14 +104,11 @@ window.featureFlags = {
 // Request the correct theme from the parent IMMEDIATELY — before React boots.
 // The parent responds with setTheme which sets sessionStorage._embedded_theme.
 // matchMedia reads sessionStorage, so React's ThemeProvider gets the right value on init.
-// This round-trip is virtually instant (<1ms same-process), React init takes ~50-200ms.
 if (window.parent !== window) {
   window.parent.postMessage({ type: 'requestTheme' }, '*');
 }
 
 // matchMedia override: reflect the platform theme instead of OS preference.
-// Reads _embedded_theme from sessionStorage (set by the requestTheme response above
-// and by subsequent setTheme messages). sessionStorage resets per page load.
 (function(){
   var _mm = window.matchMedia;
   window.matchMedia = function(q) {
@@ -126,14 +123,12 @@ if (window.parent !== window) {
   };
 })();
 
-// Block ALL navigation out of the embedded iframe
+// Block navigation out of the embedded iframe.
+// IMPORTANT: We do NOT override history.pushState/replaceState — Superset uses these
+// internally for Redux state and filter params. Blocking them causes a crash:
+// "TypeError: Cannot read properties of undefined (reading 'payload')" in core.js.
+// Chart title click-to-explore is prevented via CSS pointer-events:none (see below).
 (function(){
-  function isExternalNav(url) {
-    if (!url || typeof url !== 'string') return false;
-    return url.indexOf('/explore') !== -1 || url.indexOf('/chart/') !== -1 ||
-           (url.indexOf('/superset/') !== -1 && url.indexOf('/embedded/') === -1);
-  }
-
   // 1. Block <a> link clicks
   document.addEventListener('click', function(e) {
     var a = e.target.closest('a[href]');
@@ -165,20 +160,6 @@ if (window.parent !== window) {
       });
     }
   } catch(e) {}
-
-  // 5. Block React Router history.pushState for external paths
-  try {
-    var _push = history.pushState.bind(history);
-    var _rep = history.replaceState.bind(history);
-    history.pushState = function(s, t, url) {
-      if (isExternalNav(url)) { console.log('[TradeAudit] blocked pushState:', url); return; }
-      return _push(s, t, url);
-    };
-    history.replaceState = function(s, t, url) {
-      if (isExternalNav(url)) { console.log('[TradeAudit] blocked replaceState:', url); return; }
-      return _rep(s, t, url);
-    };
-  } catch(e) {}
 })();
 
 // --- Theme: CSS transparency + Superset native dark mode for ECharts canvas text ---
@@ -196,17 +177,28 @@ if (window.parent !== window) {
     '::-webkit-scrollbar-corner { display: none !important; }'
   ].join('\\n');
 
+  // Chart title: block click-to-explore via pointer-events (safer than pushState blocking)
+  // Also hides "Cached X ago" / "Updated X ago" data freshness badge in chart toolbar
+  var BLOCK_NAV_CSS = [
+    '.chart-header__title a, a.title-panel, [data-test="editable-title"] { pointer-events: none !important; cursor: default !important; }',
+    '[data-test="data-last-updated"], [class*="last-updated"], [class*="dataLastUpdated"], [class*="dataSourceInfo"] { display: none !important; }'
+  ].join('\\n');
+
   var DARK_OVERRIDE_CSS = [
     ':root { color-scheme: normal !important; }',
     TRANSPARENT_BG,
+    BLOCK_NAV_CSS,
     'div[class*="filter-bar"] { background: rgba(255,255,255,0.04) !important; }',
     'div[class*="Header"] { background: transparent !important; }',
     '* { color: #e0e0e0 !important; }',
     'canvas { background: transparent !important; }',
     // Fullscreen: solid background so platform doesn't bleed through
-    ':fullscreen, :-webkit-full-screen, :-moz-full-screen { background-color: #141414 !important; }',
+    ':fullscreen { background-color: #141414 !important; }',
+    ':fullscreen > * { background-color: #141414 !important; }',
+    ':-webkit-full-screen { background-color: #141414 !important; }',
+    ':-webkit-full-screen > * { background-color: #141414 !important; }',
+    ':-moz-full-screen { background-color: #141414 !important; }',
     '::backdrop { background-color: #141414 !important; }',
-    ':fullscreen > div, :-webkit-full-screen > div { background-color: #141414 !important; }',
     // Dropdown menus: solid background (prevent transparent "floating" look)
     '.ant-dropdown-menu { background-color: #262626 !important; border: 1px solid #3a3a3a !important; }',
     '.ant-dropdown-menu-item { color: #e0e0e0 !important; }',
@@ -217,12 +209,16 @@ if (window.parent !== window) {
   var LIGHT_OVERRIDE_CSS = [
     ':root { color-scheme: normal !important; }',
     TRANSPARENT_BG,
+    BLOCK_NAV_CSS,
     'div[class*="filter-bar"], div[class*="Header"] { background: transparent !important; }',
     'canvas { background: transparent !important; }',
     // Fullscreen: solid background
-    ':fullscreen, :-webkit-full-screen, :-moz-full-screen { background-color: #f5f5f5 !important; }',
+    ':fullscreen { background-color: #f5f5f5 !important; }',
+    ':fullscreen > * { background-color: #f5f5f5 !important; }',
+    ':-webkit-full-screen { background-color: #f5f5f5 !important; }',
+    ':-webkit-full-screen > * { background-color: #f5f5f5 !important; }',
+    ':-moz-full-screen { background-color: #f5f5f5 !important; }',
     '::backdrop { background-color: #f5f5f5 !important; }',
-    ':fullscreen > div, :-webkit-full-screen > div { background-color: #f5f5f5 !important; }',
     // Dropdown menus: solid background
     '.ant-dropdown-menu { background-color: #ffffff !important; border: 1px solid #e0e0e0 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important; }',
     '.ant-dropdown-menu-item:hover { background-color: #f5f5f5 !important; }',
@@ -260,8 +256,8 @@ if (window.parent !== window) {
   ];
 
   var HIDE_MENU_TEXTS = [
-    'Share', 'Embed dashboard', 'Save as', 'Edit dashboard', 'Edit chart',
-    'Compartir', 'Editar dashboard', 'Editar gráfico', 'Guardar como', 'Incrustar dashboard'
+    'Share', 'Embed dashboard', 'Save as', 'Edit dashboard', 'Edit chart', 'View query',
+    'Compartir', 'Editar dashboard', 'Editar gráfico', 'Guardar como', 'Incrustar dashboard', 'Ver consulta'
   ];
 
   function hideElements() {
@@ -310,6 +306,7 @@ if (window.parent !== window) {
 // Translate hardcoded English strings in React components
 (function(){
   var TRANSLATIONS = {
+    // Chart states
     'No results were returned for this query': 'No hay datos para mostrar',
     'There is currently no information to display.': 'No hay información disponible.',
     'No data': 'Sin datos',
@@ -317,27 +314,49 @@ if (window.parent !== window) {
     'No Results': 'Sin resultados',
     'An error occurred while loading this chart.': 'Ocurrió un error al cargar este gráfico.',
     'Try again': 'Reintentar',
+    // Chart context menu
     'Force refresh': 'Forzar actualización',
     'Edit chart': 'Editar gráfico',
     'View query': 'Ver consulta',
+    'View as table': 'Ver como tabla',
     'Download': 'Descargar',
     'Share': 'Compartir',
     'Enter fullscreen': 'Pantalla completa',
     'Exit fullscreen': 'Salir de pantalla completa',
-    'View as table': 'Ver como tabla',
-    'View query': 'Ver consulta',
+    'Copy permalink to clipboard': 'Copiar enlace',
+    'Share permalink by email': 'Compartir por correo',
+    'Export to .CSV': 'Exportar a CSV',
+    'Export to .XLSX': 'Exportar a Excel',
+    'Export to original format': 'Exportar formato original',
+    'Download as image': 'Descargar como imagen',
+    'Copy to clipboard': 'Copiar al portapapeles',
+    // Dashboard header
     'Refresh dashboard': 'Actualizar dashboard',
     'Enter fullscreen mode': 'Modo pantalla completa',
-    'Force refresh': 'Forzar actualización',
     'Set auto-refresh interval': 'Intervalo de actualización automática',
+    // Data freshness
     'Fetched': 'Actualizado',
+    'Updated': 'Actualizado',
     'seconds ago': 'hace unos segundos',
+    'a minute ago': 'hace un minuto',
     'minutes ago': 'hace minutos',
     'an hour ago': 'hace una hora',
+    'Cached': 'En caché',
+    // Table pagination
     'rows': 'filas',
     'row': 'fila',
     'Rows per page': 'Filas por página',
+    'Show': 'Mostrar',
+    'entries': 'registros',
+    'records': 'registros',
+    'Showing': 'Mostrando',
+    'to': 'a',
     'of': 'de',
+    'Previous': 'Anterior',
+    'Next': 'Siguiente',
+    'First': 'Primero',
+    'Last': 'Último',
+    // Filters
     'Search': 'Buscar',
     'Reset': 'Restablecer',
     'Apply': 'Aplicar',
@@ -385,21 +404,30 @@ if (window.parent !== window) {
 })();
 
 // Fullscreen: force solid background via JS (CSS :fullscreen alone is unreliable in iframes)
+// Walk the entire ancestor chain to ensure no transparent ancestor bleeds through.
 (function(){
   function onFullscreenChange() {
     var el = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement;
     var theme = sessionStorage.getItem('_embedded_theme') || 'light';
-    var bg = theme === 'dark' ? '#141414' : '#ffffff';
-    console.log('[TradeAudit] fullscreenchange — el:', el ? el.tagName + '.' + (el.className || '').split(' ')[0] : 'none', '| theme:', theme);
+    var bg = theme === 'dark' ? '#141414' : '#f5f5f5';
+    console.log('[TradeAudit] fullscreenchange — el:', el ? el.tagName : 'none', '| theme:', theme);
     if (el) {
-      el.style.setProperty('background-color', bg, 'important');
-      el.style.setProperty('background', bg, 'important');
-      // Also fix direct children (chart wrappers)
+      // Apply bg from root down to the fullscreen element
+      document.documentElement.style.setProperty('background-color', bg, 'important');
+      document.body.style.setProperty('background-color', bg, 'important');
+      var cur = el;
+      while (cur && cur !== document.documentElement) {
+        cur.style.setProperty('background-color', bg, 'important');
+        cur = cur.parentElement;
+      }
+      // Also fix direct children (chart canvas wrappers)
       Array.prototype.forEach.call(el.children, function(child) {
         child.style.setProperty('background-color', bg, 'important');
       });
-      var cs = window.getComputedStyle(el);
-      console.log('[TradeAudit] fullscreen bg after fix:', cs.backgroundColor);
+    } else {
+      // Exiting fullscreen — remove forced backgrounds so transparent mode resumes
+      document.documentElement.style.removeProperty('background-color');
+      document.body.style.removeProperty('background-color');
     }
   }
   document.addEventListener('fullscreenchange', onFullscreenChange);
