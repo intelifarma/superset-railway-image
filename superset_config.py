@@ -555,46 +555,27 @@ if (window.parent !== window) {
     };
   }
 
-  // Path B: detect Superset's fullscreen by watching DOM after "Pantalla completa" click.
-  // Checks TEXT CONTENT (not aria-label) and watches both attribute + childList mutations.
-  document.addEventListener('click', function(e) {
-    var el = e.target;
-    // Walk up to check if this click is on/inside a menu item with fullscreen text
-    for (var i = 0; i < 8 && el; i++, el = el.parentElement) {
-      var text = ((el.textContent || el.innerText || '') + ' ' +
-                  (el.getAttribute && el.getAttribute('aria-label') || '') + ' ' +
-                  (el.getAttribute && el.getAttribute('title') || '')).toLowerCase();
-      if (text.indexOf('pantalla') !== -1 || text.indexOf('fullscreen') !== -1) {
-        var displayText = (el.textContent || '').trim().substring(0, 40);
-        console.log('[TradeAudit] FULLSCREEN MENU ITEM CLICKED text="' + displayText + '" tag=' + el.tagName);
-        var detective = new MutationObserver(function(muts) {
-          muts.forEach(function(m) {
-            if (m.type === 'childList') {
-              m.addedNodes.forEach(function(node) {
-                if (node.nodeType !== 1) return;
-                var st = (node.getAttribute && node.getAttribute('style')) || '';
-                var cls = (node.className && typeof node.className === 'string') ? node.className.substring(0,100) : '';
-                console.log('[TradeAudit] NEW NODE added: ' + node.tagName + '#' + (node.id||'') +
-                  ' cls=' + cls + ' style=' + st.substring(0,100));
-              });
-            } else if (m.type === 'attributes') {
-              var t = m.target;
-              var val = (t.getAttribute && t.getAttribute(m.attributeName) || '').substring(0,120);
-              var cls = (t.className && typeof t.className === 'string') ? t.className.substring(0,60) : '';
-              console.log('[TradeAudit] ATTR-CHANGE ' + m.attributeName + '=' + val +
-                ' on ' + t.tagName + '#' + (t.id||'') + ' cls=' + cls);
-            }
-          });
-        });
-        detective.observe(document.documentElement, { subtree: true, attributes: true, childList: true });
-        setTimeout(function() {
-          detective.disconnect();
-          console.log('[TradeAudit] detective done');
-        }, 3000);
-        break;
+  // Path B: Superset CSS fullscreen — detected via the 'fade-out' class added to
+  // 'dashboard-component-chart-holder' when a chart enters fullscreen mode.
+  // (Confirmed via detective logs: Superset does NOT use requestFullscreen() API)
+  new MutationObserver(function(mutations) {
+    mutations.forEach(function(m) {
+      if (m.type !== 'attributes' || m.attributeName !== 'class') return;
+      var el = m.target;
+      var cls = (el.className && typeof el.className === 'string') ? el.className : '';
+      var isChartHolder = cls.indexOf('dashboard-component-chart-holder') !== -1;
+      if (!isChartHolder) return;
+      var inFullscreen = cls.indexOf('fade-out') !== -1;
+      if (inFullscreen) {
+        console.log('[TradeAudit] chart fullscreen ENTER detected (fade-out on chart-holder)');
+        applyFullscreenBg(el);
+      } else if (!inFullscreen && document.getElementById('tradeaudit-theme') &&
+                 document.getElementById('tradeaudit-theme').getAttribute('data-fs-saved')) {
+        console.log('[TradeAudit] chart fullscreen EXIT detected (fade-out removed)');
+        clearFullscreenBg();
       }
-    }
-  }, true);
+    });
+  }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['class'] });
 })();
 
 // Intercept non-critical API calls that fail for guest tokens
