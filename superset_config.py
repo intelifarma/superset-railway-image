@@ -89,8 +89,6 @@ SESSION_COOKIE_SECURE = True
 # Based on: https://github.com/apache/superset/issues/32357#issuecomment
 # ---------------------------------------------------------------------------
 EMBEDDED_SCRIPT = """<script>
-console.log('[TradeAudit EMBEDDED_SCRIPT] Script loaded inside iframe');
-
 // Feature flags — Superset reads window.featureFlags
 window.featureFlags = {
   ENABLE_JAVASCRIPT_CONTROLS: true,
@@ -312,7 +310,6 @@ if (window.parent !== window) {
     ).forEach(function(li) {
       if (li.style.display === 'none') return; // already hidden — skip to avoid loop
       var titleEl = li.querySelector('.ant-dropdown-menu-submenu-title') || li;
-      // Try multiple text extraction strategies
       var titleContent = li.querySelector('.ant-dropdown-menu-title-content');
       var text = titleContent
         ? (titleContent.textContent || '').trim()
@@ -320,12 +317,30 @@ if (window.parent !== window) {
           ? titleEl.firstChild.textContent.trim()
           : (titleEl.innerText || '').split('\\n')[0].trim());
       if (!text) return;
+
+      // "Forzar actualización" must stay visible — Superset appends the freshness
+      // timestamp ("Fetched hace X") to the same element's text. Hide only that
+      // sub-span, not the whole menu item.
+      var isFreshnessSuffix = /cached|fetched|updated|en cach/i.test(text) ||
+                              /hace (unos|un|[0-9]+)|ago/i.test(text);
+      var isForceRefresh = text.indexOf('Forzar') === 0 || text.indexOf('Force') === 0;
+      if (isForceRefresh && isFreshnessSuffix) {
+        // Hide only the freshness child span(s), keep the action label
+        li.querySelectorAll('span').forEach(function(span) {
+          if (span === titleContent) return;
+          var spanText = (span.textContent || '').trim();
+          if (spanText && (/cached|fetched|updated/i.test(spanText) || /hace (unos|un|[0-9]+)|ago/i.test(spanText))
+              && spanText.indexOf('Forzar') === -1) {
+            if (span.style.display !== 'none') span.style.setProperty('display', 'none', 'important');
+          }
+        });
+        return;
+      }
+
       var shouldHide = HIDE_MENU_TEXTS.some(function(t){ return text.indexOf(t) !== -1; })
-        // Hide "Cached …" / "Fetched …" freshness info rows regardless of language
         || /cached|fetched|updated|en cach|actualizado/i.test(text)
         || /hace (unos|un|[0-9]+)|ago/i.test(text);
       if (shouldHide) {
-        console.log('[TradeAudit] hiding menu item:', JSON.stringify(text));
         li.style.setProperty('display', 'none', 'important');
       }
     });
@@ -459,16 +474,9 @@ if (window.parent !== window) {
 })();
 
 // Fullscreen background fix.
-// Two paths handled:
-//   A) Browser Fullscreen API (requestFullscreen) — fires fullscreenchange event
-//   B) Superset CSS fullscreen (classList toggle) — no event fires, detected via MutationObserver
+// Superset embedded uses its own CSS fullscreen (not the browser requestFullscreen API).
+// It adds class 'fade-out' to 'dashboard-component-chart-holder' on enter, removes on exit.
 (function(){
-  // Diagnostic: log fullscreen capability 2s after page load
-  setTimeout(function() {
-    console.log('[TradeAudit] fullscreenEnabled:', document.fullscreenEnabled,
-      '| webkitFullscreenEnabled:', !!document.webkitFullscreenEnabled);
-  }, 2000);
-
   var fsStyleEl = null;
 
   function getBg() {
@@ -478,17 +486,14 @@ if (window.parent !== window) {
 
   function applyFullscreenBg(el) {
     var bg = getBg();
-    // Strategy: swap the transparent CSS for a solid-bg version.
-    // This avoids the CSS specificity war entirely — no competing !important rules.
+    // Swap transparent CSS for solid — avoids the !important specificity war entirely
     var themeEl = document.getElementById('tradeaudit-theme');
     if (themeEl && !themeEl.getAttribute('data-fs-saved')) {
       themeEl.setAttribute('data-fs-saved', themeEl.textContent);
       themeEl.textContent = themeEl.textContent
         .replace(/background:\s*transparent\s*!important/g,   'background: ' + bg + ' !important')
         .replace(/background-color:\s*transparent\s*!important/g, 'background-color: ' + bg + ' !important');
-      console.log('[TradeAudit] fullscreen: swapped theme CSS to solid bg=', bg);
     }
-    // Also inject ::backdrop (not in theme CSS) and explicit fullscreen rules
     if (!fsStyleEl) {
       fsStyleEl = document.createElement('style');
       fsStyleEl.id = 'ta-fullscreen-style';
@@ -496,7 +501,6 @@ if (window.parent !== window) {
     }
     fsStyleEl.textContent = '::backdrop { background-color: ' + bg + ' !important; }' +
       ':fullscreen, :-webkit-full-screen { background-color: ' + bg + ' !important; }';
-    // Inline on ancestors for belt-and-suspenders
     document.documentElement.style.setProperty('background-color', bg, 'important');
     document.body.style.setProperty('background-color', bg, 'important');
     var cur = el || document.body;
@@ -504,74 +508,51 @@ if (window.parent !== window) {
       cur.style.setProperty('background-color', bg, 'important');
       cur = cur.parentElement;
     }
-    console.log('[TradeAudit] fullscreen bg applied: bg=', bg, '| el:', el ? el.tagName + '#' + (el.id||'') : 'body');
   }
 
   function clearFullscreenBg() {
-    // Restore original transparent theme CSS
     var themeEl = document.getElementById('tradeaudit-theme');
     if (themeEl) {
       var saved = themeEl.getAttribute('data-fs-saved');
-      if (saved) {
-        themeEl.textContent = saved;
-        themeEl.removeAttribute('data-fs-saved');
-      }
+      if (saved) { themeEl.textContent = saved; themeEl.removeAttribute('data-fs-saved'); }
     }
     if (fsStyleEl) fsStyleEl.textContent = '';
     document.documentElement.style.removeProperty('background-color');
     document.body.style.removeProperty('background-color');
-    console.log('[TradeAudit] fullscreen bg cleared, theme CSS restored');
   }
 
-  // Path A: Browser Fullscreen API
+  // Also handle browser fullscreen API (belt-and-suspenders)
   function onFullscreenChange() {
     var el = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement;
-    console.log('[TradeAudit] fullscreenchange | el:', el ? (el.tagName + '#' + (el.id||'') + ' cls=' + (el.className||'').toString().substring(0,60)) : 'null (exiting)');
-    if (el) {
-      applyFullscreenBg(el);
-    } else {
-      clearFullscreenBg();
-    }
+    if (el) { applyFullscreenBg(el); } else { clearFullscreenBg(); }
   }
   document.addEventListener('fullscreenchange', onFullscreenChange);
   document.addEventListener('webkitfullscreenchange', onFullscreenChange);
   document.addEventListener('mozfullscreenchange', onFullscreenChange);
 
-  // Path A2: Patch Element.prototype.requestFullscreen so bg is applied immediately
-  // (before fullscreenchange fires, to prevent a flash of transparent content)
   var _origReqFS = Element.prototype.requestFullscreen;
   if (_origReqFS) {
     Element.prototype.requestFullscreen = function(opts) {
-      console.log('[TradeAudit] requestFullscreen called on:', this.tagName + '#' + (this.id||''));
       applyFullscreenBg(this);
       return _origReqFS.call(this, opts);
     };
   }
   var _origExitFS = document.exitFullscreen ? document.exitFullscreen.bind(document) : null;
   if (_origExitFS) {
-    document.exitFullscreen = function() {
-      clearFullscreenBg();
-      return _origExitFS();
-    };
+    document.exitFullscreen = function() { clearFullscreenBg(); return _origExitFS(); };
   }
 
-  // Path B: Superset CSS fullscreen — detected via the 'fade-out' class added to
-  // 'dashboard-component-chart-holder' when a chart enters fullscreen mode.
-  // (Confirmed via detective logs: Superset does NOT use requestFullscreen() API)
+  // Detect Superset CSS fullscreen: 'fade-out' class on 'dashboard-component-chart-holder'
   new MutationObserver(function(mutations) {
     mutations.forEach(function(m) {
       if (m.type !== 'attributes' || m.attributeName !== 'class') return;
       var el = m.target;
       var cls = (el.className && typeof el.className === 'string') ? el.className : '';
-      var isChartHolder = cls.indexOf('dashboard-component-chart-holder') !== -1;
-      if (!isChartHolder) return;
-      var inFullscreen = cls.indexOf('fade-out') !== -1;
-      if (inFullscreen) {
-        console.log('[TradeAudit] chart fullscreen ENTER detected (fade-out on chart-holder)');
+      if (cls.indexOf('dashboard-component-chart-holder') === -1) return;
+      if (cls.indexOf('fade-out') !== -1) {
         applyFullscreenBg(el);
-      } else if (!inFullscreen && document.getElementById('tradeaudit-theme') &&
+      } else if (document.getElementById('tradeaudit-theme') &&
                  document.getElementById('tradeaudit-theme').getAttribute('data-fs-saved')) {
-        console.log('[TradeAudit] chart fullscreen EXIT detected (fade-out removed)');
         clearFullscreenBg();
       }
     });
