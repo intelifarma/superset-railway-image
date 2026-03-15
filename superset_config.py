@@ -1,6 +1,6 @@
 import logging
 import os
-from flask import Flask, request as flask_request
+from flask import Flask, request as flask_request, redirect
 
 logger = logging.getLogger()
 
@@ -64,7 +64,7 @@ CORS_OPTIONS = {
 }
 
 # Guest token config
-GUEST_ROLE_NAME = "Public"
+GUEST_ROLE_NAME = "EmbeddedViewer"
 GUEST_TOKEN_JWT_SECRET = os.environ.get("SUPERSET_SECRET_KEY", "CHANGE_ME")
 GUEST_TOKEN_JWT_ALGO = "HS256"
 GUEST_TOKEN_HEADER_NAME = "X-GuestToken"
@@ -213,6 +213,47 @@ if (window.parent !== window) {
   });
 })();
 
+// Hide edit/share/embed controls — these should not be visible to end users
+(function(){
+  var HIDE_SELECTORS = [
+    // Edit dashboard button (top-right)
+    '[data-test="edit-alt-button"]',
+    // "+" add chart/tab buttons
+    '[data-test="dashboard-header-add-component"]',
+    '[aria-label="Add components"]',
+  ];
+
+  // Text fragments in menu items to hide (matched against innerText)
+  var HIDE_MENU_TEXTS = ['Share', 'Embed dashboard', 'Save as', 'Edit dashboard'];
+
+  function hideElements() {
+    // Hide by selector
+    HIDE_SELECTORS.forEach(function(sel) {
+      document.querySelectorAll(sel).forEach(function(el) {
+        el.style.setProperty('display', 'none', 'important');
+      });
+    });
+    // Hide dropdown menu items by text
+    document.querySelectorAll('.ant-dropdown-menu-item, li[role="menuitem"]').forEach(function(li) {
+      var text = li.innerText && li.innerText.trim();
+      if (text && HIDE_MENU_TEXTS.some(function(t){ return text.indexOf(t) !== -1; })) {
+        li.style.setProperty('display', 'none', 'important');
+      }
+    });
+  }
+
+  var hideObserver = new MutationObserver(function() { hideElements(); });
+  document.addEventListener('DOMContentLoaded', function() {
+    hideElements();
+    hideObserver.observe(document.body, { childList: true, subtree: true });
+  });
+  // Also run immediately in case DOM is already ready
+  if (document.body) {
+    hideElements();
+    hideObserver.observe(document.body, { childList: true, subtree: true });
+  }
+})();
+
 // Translate hardcoded English strings in React components
 (function(){
   var TRANSLATIONS = {
@@ -297,7 +338,20 @@ if (window.parent !== window) {
 })();
 </script>"""
 
+PLATFORM_URL = os.environ.get("PLATFORM_URL", "https://tu-plataforma.com")
+ADMIN_ACCESS_KEY = os.environ.get("SUPERSET_ADMIN_KEY", "CHANGE_ME_ADMIN_KEY")
+
 def FLASK_APP_MUTATOR(app: Flask):
+    @app.before_request
+    def block_direct_login():
+        path = flask_request.path
+        # Block the HTML login page — redirect to the platform
+        # Admin can still access via /login?key=SECRET
+        if path in ("/login/", "/login"):
+            key = flask_request.args.get("key", "")
+            if key != ADMIN_ACCESS_KEY:
+                return redirect(PLATFORM_URL, code=302)
+
     @app.after_request
     def inject_embedded_overrides(response):
         if '/embedded/' not in flask_request.path:
