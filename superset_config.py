@@ -482,6 +482,7 @@ if (window.parent !== window) {
 // It adds class 'fade-out' to 'dashboard-component-chart-holder' on enter, removes on exit.
 (function(){
   var fsStyleEl = null;
+  var _fsEl = null; // track which element triggered fullscreen so we can fully clean up
 
   function getBg() {
     var theme = sessionStorage.getItem('_embedded_theme') || 'light';
@@ -489,6 +490,7 @@ if (window.parent !== window) {
   }
 
   function applyFullscreenBg(el) {
+    _fsEl = el || null;
     var bg = getBg();
     // Swap transparent CSS for solid — avoids the !important specificity war entirely
     var themeEl = document.getElementById('tradeaudit-theme');
@@ -523,6 +525,15 @@ if (window.parent !== window) {
     if (fsStyleEl) fsStyleEl.textContent = '';
     document.documentElement.style.removeProperty('background-color');
     document.body.style.removeProperty('background-color');
+    // Remove inline background-color from the chart holder and ALL ancestors we patched.
+    // Without this, intermediate elements (row div, grid div, etc.) keep the inline style
+    // which interferes with chart header button visibility after exiting fullscreen.
+    var cur = _fsEl;
+    while (cur && cur !== document.documentElement) {
+      cur.style.removeProperty('background-color');
+      cur = cur.parentElement;
+    }
+    _fsEl = null;
   }
 
   // Also handle browser fullscreen API (belt-and-suspenders)
