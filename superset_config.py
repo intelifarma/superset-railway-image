@@ -339,9 +339,9 @@ if (window.parent !== window) {
                              /hace (unos|un|[0-9]+)|ago/i.test(elText);
           console.log('[TA-MENU]   hasFreshness:', hasFreshness);
           if (!hasFreshness) return;
-          // Strip the state word, keep only the relative time ("hace X")
+          // Replace the state word with "Actualizado" so it reads "Actualizado hace X"
           var cleaned = elText
-            .replace(/^(cached|fetched|updated|en cach[eé]|actualizado)\s*/i, '')
+            .replace(/^(cached|fetched|updated|en cach[eé]|actualizado)\s*/i, 'Actualizado ')
             .replace(/\s*(ago)$/i, '')
             .trim();
           console.log('[TA-MENU]   cleaned:', JSON.stringify(cleaned));
@@ -586,8 +586,18 @@ if (window.parent !== window) {
   }
 
   // Detect Superset CSS fullscreen: 'fade-out' class on 'dashboard-component-chart-holder'
+  // EXIT is detected two ways:
+  //   A) 'fade-out' class removed (attribute change) — some Superset versions
+  //   B) _fsEl removed from DOM (React unmounts/remounts on exit) — most common
   console.log('[TA-FS] MutationObserver for fullscreen registered');
   new MutationObserver(function(mutations) {
+    // First: check if tracked fullscreen element left the DOM (Scenario B — React remount)
+    if (_fsEl && !document.body.contains(_fsEl)) {
+      console.log('[TA-FS] >>> EXIT fullscreen detected (element removed from DOM)');
+      clearFullscreenBg();
+      return;
+    }
+
     mutations.forEach(function(m) {
       if (m.type !== 'attributes' || m.attributeName !== 'class') return;
       var el = m.target;
@@ -601,13 +611,13 @@ if (window.parent !== window) {
         console.log('[TA-FS] >>> ENTER fullscreen detected');
         applyFullscreenBg(el);
       } else if (themeElNow && fsSaved === 'yes') {
-        console.log('[TA-FS] >>> EXIT fullscreen detected — calling clearFullscreenBg');
+        console.log('[TA-FS] >>> EXIT fullscreen detected (class change)');
         clearFullscreenBg();
       } else {
         console.log('[TA-FS] chart-holder changed but fade-out absent and no fs-saved — nothing to do');
       }
     });
-  }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['class'] });
+  }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
 })();
 
 // Intercept non-critical API calls that fail for guest tokens
