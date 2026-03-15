@@ -493,7 +493,8 @@ if (window.parent !== window) {
 // It adds class 'fade-out' to 'dashboard-component-chart-holder' on enter, removes on exit.
 (function(){
   var fsStyleEl = null;
-  var _fsEl = null; // track which element triggered fullscreen so we can fully clean up
+  var _fsEl = null;
+  var _fsAncestors = []; // explicit list — survives React unmounting _fsEl
 
   function getBg() {
     var theme = sessionStorage.getItem('_embedded_theme') || 'light';
@@ -502,6 +503,7 @@ if (window.parent !== window) {
 
   function applyFullscreenBg(el) {
     _fsEl = el || null;
+    _fsAncestors = [];
     var bg = getBg();
     console.log('[TA-FS] applyFullscreenBg — bg:', bg, '| el:', el ? el.className.substring(0,60) : 'null');
     // Swap transparent CSS for solid — avoids the !important specificity war entirely
@@ -525,17 +527,16 @@ if (window.parent !== window) {
     document.documentElement.style.setProperty('background-color', bg, 'important');
     document.body.style.setProperty('background-color', bg, 'important');
     var cur = el || document.body;
-    var depth = 0;
     while (cur && cur !== document.documentElement) {
       cur.style.setProperty('background-color', bg, 'important');
-      depth++;
+      _fsAncestors.push(cur); // save ref so cleanup works even after React unmounts _fsEl
       cur = cur.parentElement;
     }
-    console.log('[TA-FS] set background-color on', depth, 'ancestor elements');
+    console.log('[TA-FS] set background-color on', _fsAncestors.length, 'ancestor elements, saved refs:', _fsAncestors.length);
   }
 
   function clearFullscreenBg() {
-    console.log('[TA-FS] clearFullscreenBg — _fsEl:', _fsEl ? _fsEl.className.substring(0,60) : 'null');
+    console.log('[TA-FS] clearFullscreenBg — _fsAncestors:', _fsAncestors.length, '| _fsEl in DOM:', _fsEl ? document.body.contains(_fsEl) : 'null');
     var themeEl = document.getElementById('tradeaudit-theme');
     if (themeEl) {
       var saved = themeEl.getAttribute('data-fs-saved');
@@ -550,17 +551,12 @@ if (window.parent !== window) {
     if (fsStyleEl) fsStyleEl.textContent = '';
     document.documentElement.style.removeProperty('background-color');
     document.body.style.removeProperty('background-color');
-    // Remove inline background-color from the chart holder and ALL ancestors we patched.
-    // Without this, intermediate elements (row div, grid div, etc.) keep the inline style
-    // which interferes with chart header button visibility after exiting fullscreen.
-    var cur = _fsEl;
-    var depth = 0;
-    while (cur && cur !== document.documentElement) {
-      cur.style.removeProperty('background-color');
-      depth++;
-      cur = cur.parentElement;
-    }
-    console.log('[TA-FS] removed background-color from', depth, 'ancestor elements');
+    // Use saved ancestor list — works even if _fsEl was unmounted by React (parentElement=null)
+    _fsAncestors.forEach(function(ancestor) {
+      ancestor.style.removeProperty('background-color');
+    });
+    console.log('[TA-FS] removed background-color from', _fsAncestors.length, 'saved ancestor elements');
+    _fsAncestors = [];
     _fsEl = null;
   }
 
