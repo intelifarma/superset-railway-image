@@ -124,28 +124,47 @@ if (window.parent !== window) {
 })();
 
 // Block navigation out of the embedded iframe.
-// IMPORTANT: We do NOT override history.pushState/replaceState — Superset uses these
-// internally for Redux state and filter params. Blocking them causes a crash:
-// "TypeError: Cannot read properties of undefined (reading 'payload')" in core.js.
-// Chart title click-to-explore is prevented via CSS pointer-events:none (see below).
+// CRITICAL: Do NOT block history.pushState/replaceState globally — Superset uses them
+// for filter params and Redux state. Blocking them causes React Router to dispatch
+// a navigation action that never completes → "TypeError: payload undefined" in core.js.
+//
+// For chart title click-to-explore: intercept in the capture phase BEFORE React handles
+// it via stopImmediatePropagation(). CSS pointer-events:none is added as a second layer.
 (function(){
-  // 1. Block <a> link clicks
+  // 1. Capture-phase click interceptor — stops chart title navigation before React fires
   document.addEventListener('click', function(e) {
-    var a = e.target.closest('a[href]');
-    if (!a) return;
-    var href = a.getAttribute('href') || '';
-    if (href !== '#' && !href.startsWith('#')) {
-      console.log('[TradeAudit] blocked link click:', href);
-      e.preventDefault(); e.stopPropagation();
+    var el = e.target;
+    while (el && el !== document.body) {
+      var dt = el.getAttribute && el.getAttribute('data-test');
+      var titleAttr = (el.getAttribute && el.getAttribute('title')) || '';
+      var cls = (el.className && typeof el.className === 'string') ? el.className : '';
+      if (dt === 'editable-title' ||
+          titleAttr.toLowerCase().indexOf('click to edit') !== -1 ||
+          cls.indexOf('chart-header__title') !== -1) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return;
+      }
+      // Also block any <a> with internal href
+      if (el.tagName === 'A') {
+        var href = el.getAttribute('href') || '';
+        if (href && href !== '#' && !href.startsWith('#')) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+      }
+      el = el.parentElement;
     }
   }, true);
 
   // 2. Block window.open
-  window.open = function(u) { console.log('[TradeAudit] blocked window.open:', u); return null; };
+  window.open = function(u) { return null; };
 
   // 3. Block location.assign / replace
-  try { window.location.assign = function(u) { console.log('[TradeAudit] blocked assign:', u); }; } catch(e) {}
-  try { window.location.replace = function(u) { console.log('[TradeAudit] blocked replace:', u); }; } catch(e) {}
+  try { window.location.assign = function(u) {}; } catch(e) {}
+  try { window.location.replace = function(u) {}; } catch(e) {}
 
   // 4. Block location.href setter
   try {
@@ -155,7 +174,6 @@ if (window.parent !== window) {
         get: locDesc.get,
         set: function(v) {
           if (typeof v === 'string' && v.startsWith('#')) locDesc.set.call(this, v);
-          else console.log('[TradeAudit] blocked href=', v);
         }
       });
     }
@@ -177,10 +195,14 @@ if (window.parent !== window) {
     '::-webkit-scrollbar-corner { display: none !important; }'
   ].join('\\n');
 
-  // Chart title: block click-to-explore via pointer-events (safer than pushState blocking)
-  // Also hides "Cached X ago" / "Updated X ago" data freshness badge in chart toolbar
+  // Chart title: block click-to-explore (CSS is secondary; JS capture handler is primary)
+  // Disabled menu items (e.g. "Cached X ago") and dividers are hidden outright
   var BLOCK_NAV_CSS = [
-    '.chart-header__title a, a.title-panel, [data-test="editable-title"] { pointer-events: none !important; cursor: default !important; }',
+    // Prevent chart title hover/click — broad selectors to cover all Superset versions
+    '.chart-header__title, .chart-header__title *, [data-test="editable-title"], a.title-panel { pointer-events: none !important; cursor: default !important; }',
+    // Hide "Cached X ago" disabled info row and menu dividers
+    '.ant-dropdown-menu-item-disabled, .ant-dropdown-menu-item-divider { display: none !important; }',
+    // Also hide the freshness badge in chart toolbar
     '[data-test="data-last-updated"], [class*="last-updated"], [class*="dataLastUpdated"], [class*="dataSourceInfo"] { display: none !important; }'
   ].join('\\n');
 
@@ -263,24 +285,28 @@ if (window.parent !== window) {
   function hideElements() {
     HIDE_SELECTORS.forEach(function(sel) {
       document.querySelectorAll(sel).forEach(function(el) {
-        el.style.setProperty('display', 'none', 'important');
+        if (el.style.display !== 'none') el.style.setProperty('display', 'none', 'important');
       });
     });
     // Hide menu items AND submenu parents (Compartir is a submenu, not a plain item)
     document.querySelectorAll(
       '.ant-dropdown-menu-item, .ant-dropdown-menu-submenu, li[role="menuitem"]'
     ).forEach(function(li) {
-      // For submenus, the text is in the title div
+      if (li.style.display === 'none') return; // already hidden — skip to avoid loop
       var titleEl = li.querySelector('.ant-dropdown-menu-submenu-title') || li;
       var text = (titleEl.firstChild && titleEl.firstChild.nodeType === 3)
         ? titleEl.firstChild.textContent.trim()
         : (titleEl.innerText || '').split('\\n')[0].trim();
-      if (text && HIDE_MENU_TEXTS.some(function(t){ return text.indexOf(t) !== -1; })) {
+      if (!text) return;
+      var shouldHide = HIDE_MENU_TEXTS.some(function(t){ return text.indexOf(t) !== -1; })
+        // Also hide "Cached …" / "Fetched …" freshness text rows
+        || /^(Cached|Fetched|Updated|En cach|Actualizado)\b/i.test(text);
+      if (shouldHide) {
         console.log('[TradeAudit] hiding menu item:', text);
         li.style.setProperty('display', 'none', 'important');
       }
     });
-    // Remove href from ALL internal Superset links
+    // Remove href and title tooltip from ALL internal Superset links
     document.querySelectorAll('a[href]').forEach(function(a) {
       var href = a.getAttribute('href') || '';
       if (href.startsWith('/') || href.startsWith(window.location.origin)) {
@@ -291,12 +317,16 @@ if (window.parent !== window) {
     });
   }
 
-  var hideObserver = new MutationObserver(function() { hideElements(); });
+  // Debounced observer — prevents infinite loop when our own style changes trigger mutations
+  var _hideTimer = null;
+  var hideObserver = new MutationObserver(function() {
+    if (_hideTimer) return;
+    _hideTimer = setTimeout(function() { _hideTimer = null; hideElements(); }, 80);
+  });
   document.addEventListener('DOMContentLoaded', function() {
     hideElements();
     hideObserver.observe(document.body, { childList: true, subtree: true });
   });
-  // Also run immediately in case DOM is already ready
   if (document.body) {
     hideElements();
     hideObserver.observe(document.body, { childList: true, subtree: true });
@@ -403,16 +433,32 @@ if (window.parent !== window) {
   });
 })();
 
-// Fullscreen: force solid background via JS (CSS :fullscreen alone is unreliable in iframes)
-// Walk the entire ancestor chain to ensure no transparent ancestor bleeds through.
+// Fullscreen: inject a high-specificity <style> that beats TRANSPARENT_BG's !important rules.
+// CSS specificity: :fullscreen div[class] = (0,2,1) > div[class*="..."] = (0,1,1)
+// Also set inline !important on all ancestors (inline always beats any stylesheet rule).
 (function(){
+  var fsStyleEl = null;
+
   function onFullscreenChange() {
     var el = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement;
     var theme = sessionStorage.getItem('_embedded_theme') || 'light';
     var bg = theme === 'dark' ? '#141414' : '#f5f5f5';
-    console.log('[TradeAudit] fullscreenchange — el:', el ? el.tagName : 'none', '| theme:', theme);
+
     if (el) {
-      // Apply bg from root down to the fullscreen element
+      // 1. Inject high-specificity stylesheet rules
+      if (!fsStyleEl) {
+        fsStyleEl = document.createElement('style');
+        fsStyleEl.id = 'ta-fullscreen-style';
+        document.head.appendChild(fsStyleEl);
+      }
+      fsStyleEl.textContent = [
+        ':fullscreen, :-webkit-full-screen, :-moz-full-screen { background-color: ' + bg + ' !important; }',
+        ':fullscreen div[class], :-webkit-full-screen div[class] { background-color: ' + bg + ' !important; }',
+        ':fullscreen canvas, :-webkit-full-screen canvas { background-color: ' + bg + ' !important; }',
+        'html:has(:fullscreen), body:has(:fullscreen) { background-color: ' + bg + ' !important; }'
+      ].join('\\n');
+
+      // 2. Inline !important on every ancestor (inline beats any stylesheet rule)
       document.documentElement.style.setProperty('background-color', bg, 'important');
       document.body.style.setProperty('background-color', bg, 'important');
       var cur = el;
@@ -420,12 +466,9 @@ if (window.parent !== window) {
         cur.style.setProperty('background-color', bg, 'important');
         cur = cur.parentElement;
       }
-      // Also fix direct children (chart canvas wrappers)
-      Array.prototype.forEach.call(el.children, function(child) {
-        child.style.setProperty('background-color', bg, 'important');
-      });
     } else {
-      // Exiting fullscreen — remove forced backgrounds so transparent mode resumes
+      // Exiting fullscreen — clear injected rules and inline overrides
+      if (fsStyleEl) fsStyleEl.textContent = '';
       document.documentElement.style.removeProperty('background-color');
       document.body.style.removeProperty('background-color');
     }
