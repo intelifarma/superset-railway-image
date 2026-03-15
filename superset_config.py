@@ -181,14 +181,29 @@ if (window.parent !== window) {
     'div[class*="filter-bar"] { background: rgba(255,255,255,0.04) !important; }',
     'div[class*="Header"] { background: transparent !important; }',
     '* { color: #e0e0e0 !important; }',
-    'canvas { background: transparent !important; }'
+    'canvas { background: transparent !important; }',
+    // Fullscreen: solid background so platform doesn't bleed through
+    ':fullscreen { background-color: #141414 !important; }',
+    '::backdrop { background-color: #141414 !important; }',
+    // Dropdown menus: solid background (prevent transparent "floating" look)
+    '.ant-dropdown-menu { background-color: #262626 !important; border: 1px solid #3a3a3a !important; }',
+    '.ant-dropdown-menu-item { color: #e0e0e0 !important; }',
+    '.ant-dropdown-menu-item:hover { background-color: #3a3a3a !important; }',
+    '.ant-tooltip-inner { background-color: #262626 !important; color: #e0e0e0 !important; }'
   ].join('\\n');
 
   var LIGHT_OVERRIDE_CSS = [
     ':root { color-scheme: normal !important; }',
     TRANSPARENT_BG,
     'div[class*="filter-bar"], div[class*="Header"] { background: transparent !important; }',
-    'canvas { background: transparent !important; }'
+    'canvas { background: transparent !important; }',
+    // Fullscreen: solid background
+    ':fullscreen { background-color: #f5f5f5 !important; }',
+    '::backdrop { background-color: #f5f5f5 !important; }',
+    // Dropdown menus: solid background
+    '.ant-dropdown-menu { background-color: #ffffff !important; border: 1px solid #e0e0e0 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important; }',
+    '.ant-dropdown-menu-item:hover { background-color: #f5f5f5 !important; }',
+    '.ant-tooltip-inner { background-color: #ffffff !important; color: #141414 !important; border: 1px solid #e0e0e0 !important; }'
   ].join('\\n');
 
   var styleEl = null;
