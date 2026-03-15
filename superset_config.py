@@ -484,10 +484,17 @@ if (window.parent !== window) {
       fsStyleEl.id = 'ta-fullscreen-style';
       document.head.appendChild(fsStyleEl);
     }
+    // Specificity battle:
+    // TRANSPARENT_BG uses div[class*="dashboard"] = (0,1,1) = 11pts
+    // We need (0,2,0)+ to win.
+    // :fullscreen [class]     = pseudo-class(10) + attr(10) = 20pts ✓ WINS
+    // :fullscreen div[class]  = pseudo-class(10) + type(1) + attr(10) = 21pts ✓ WINS
     fsStyleEl.textContent = [
-      ':fullscreen, :-webkit-full-screen, :-moz-full-screen { background-color: ' + bg + ' !important; }',
-      ':fullscreen *, :-webkit-full-screen * { background-color: ' + bg + ' !important; }',
-      ':fullscreen canvas, :-webkit-full-screen canvas { background: ' + bg + ' !important; }',
+      ':fullscreen { background-color: ' + bg + ' !important; }',
+      ':-webkit-full-screen { background-color: ' + bg + ' !important; }',
+      ':fullscreen [class], :-webkit-full-screen [class] { background-color: ' + bg + ' !important; }',
+      ':fullscreen div[class], :-webkit-full-screen div[class] { background-color: ' + bg + ' !important; }',
+      ':fullscreen canvas, :-webkit-full-screen canvas { background-color: ' + bg + ' !important; }',
       '::backdrop { background-color: ' + bg + ' !important; }'
     ].join('\\n');
     // 2. Inline overrides: walk UP the tree from fullscreen element to root
