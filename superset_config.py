@@ -64,7 +64,7 @@ CORS_OPTIONS = {
 }
 
 # Guest token config
-GUEST_ROLE_NAME = "EmbeddedViewer"
+GUEST_ROLE_NAME = "Public"
 GUEST_TOKEN_JWT_SECRET = os.environ.get("SUPERSET_SECRET_KEY", "CHANGE_ME")
 GUEST_TOKEN_JWT_ALGO = "HS256"
 GUEST_TOKEN_HEADER_NAME = "X-GuestToken"
@@ -183,8 +183,9 @@ if (window.parent !== window) {
     '* { color: #e0e0e0 !important; }',
     'canvas { background: transparent !important; }',
     // Fullscreen: solid background so platform doesn't bleed through
-    ':fullscreen { background-color: #141414 !important; }',
+    ':fullscreen, :-webkit-full-screen, :-moz-full-screen { background-color: #141414 !important; }',
     '::backdrop { background-color: #141414 !important; }',
+    ':fullscreen > div, :-webkit-full-screen > div { background-color: #141414 !important; }',
     // Dropdown menus: solid background (prevent transparent "floating" look)
     '.ant-dropdown-menu { background-color: #262626 !important; border: 1px solid #3a3a3a !important; }',
     '.ant-dropdown-menu-item { color: #e0e0e0 !important; }',
@@ -198,8 +199,9 @@ if (window.parent !== window) {
     'div[class*="filter-bar"], div[class*="Header"] { background: transparent !important; }',
     'canvas { background: transparent !important; }',
     // Fullscreen: solid background
-    ':fullscreen { background-color: #f5f5f5 !important; }',
+    ':fullscreen, :-webkit-full-screen, :-moz-full-screen { background-color: #f5f5f5 !important; }',
     '::backdrop { background-color: #f5f5f5 !important; }',
+    ':fullscreen > div, :-webkit-full-screen > div { background-color: #f5f5f5 !important; }',
     // Dropdown menus: solid background
     '.ant-dropdown-menu { background-color: #ffffff !important; border: 1px solid #e0e0e0 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important; }',
     '.ant-dropdown-menu-item:hover { background-color: #f5f5f5 !important; }',
@@ -284,6 +286,16 @@ if (window.parent !== window) {
     'View query': 'Ver consulta',
     'Download': 'Descargar',
     'Share': 'Compartir',
+    'Enter fullscreen': 'Pantalla completa',
+    'Exit fullscreen': 'Salir de pantalla completa',
+    'Refresh dashboard': 'Actualizar dashboard',
+    'Enter fullscreen mode': 'Modo pantalla completa',
+    'Force refresh': 'Forzar actualización',
+    'Set auto-refresh interval': 'Intervalo de actualización automática',
+    'Fetched': 'Actualizado',
+    'seconds ago': 'hace unos segundos',
+    'minutes ago': 'hace minutos',
+    'an hour ago': 'hace una hora',
     'rows': 'filas',
     'row': 'fila',
     'Rows per page': 'Filas por página',
