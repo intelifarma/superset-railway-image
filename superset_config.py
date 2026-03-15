@@ -478,26 +478,25 @@ if (window.parent !== window) {
 
   function applyFullscreenBg(el) {
     var bg = getBg();
-    // 1. High-specificity stylesheet (covers :fullscreen children)
+    // Strategy: swap the transparent CSS for a solid-bg version.
+    // This avoids the CSS specificity war entirely — no competing !important rules.
+    var themeEl = document.getElementById('tradeaudit-theme');
+    if (themeEl && !themeEl.getAttribute('data-fs-saved')) {
+      themeEl.setAttribute('data-fs-saved', themeEl.textContent);
+      themeEl.textContent = themeEl.textContent
+        .replace(/background:\s*transparent\s*!important/g,   'background: ' + bg + ' !important')
+        .replace(/background-color:\s*transparent\s*!important/g, 'background-color: ' + bg + ' !important');
+      console.log('[TradeAudit] fullscreen: swapped theme CSS to solid bg=', bg);
+    }
+    // Also inject ::backdrop (not in theme CSS) and explicit fullscreen rules
     if (!fsStyleEl) {
       fsStyleEl = document.createElement('style');
       fsStyleEl.id = 'ta-fullscreen-style';
       document.head.appendChild(fsStyleEl);
     }
-    // Specificity battle:
-    // TRANSPARENT_BG uses div[class*="dashboard"] = (0,1,1) = 11pts
-    // We need (0,2,0)+ to win.
-    // :fullscreen [class]     = pseudo-class(10) + attr(10) = 20pts ✓ WINS
-    // :fullscreen div[class]  = pseudo-class(10) + type(1) + attr(10) = 21pts ✓ WINS
-    fsStyleEl.textContent = [
-      ':fullscreen { background-color: ' + bg + ' !important; }',
-      ':-webkit-full-screen { background-color: ' + bg + ' !important; }',
-      ':fullscreen [class], :-webkit-full-screen [class] { background-color: ' + bg + ' !important; }',
-      ':fullscreen div[class], :-webkit-full-screen div[class] { background-color: ' + bg + ' !important; }',
-      ':fullscreen canvas, :-webkit-full-screen canvas { background-color: ' + bg + ' !important; }',
-      '::backdrop { background-color: ' + bg + ' !important; }'
-    ].join('\\n');
-    // 2. Inline overrides: walk UP the tree from fullscreen element to root
+    fsStyleEl.textContent = '::backdrop { background-color: ' + bg + ' !important; }' +
+      ':fullscreen, :-webkit-full-screen { background-color: ' + bg + ' !important; }';
+    // Inline on ancestors for belt-and-suspenders
     document.documentElement.style.setProperty('background-color', bg, 'important');
     document.body.style.setProperty('background-color', bg, 'important');
     var cur = el || document.body;
@@ -509,10 +508,19 @@ if (window.parent !== window) {
   }
 
   function clearFullscreenBg() {
+    // Restore original transparent theme CSS
+    var themeEl = document.getElementById('tradeaudit-theme');
+    if (themeEl) {
+      var saved = themeEl.getAttribute('data-fs-saved');
+      if (saved) {
+        themeEl.textContent = saved;
+        themeEl.removeAttribute('data-fs-saved');
+      }
+    }
     if (fsStyleEl) fsStyleEl.textContent = '';
     document.documentElement.style.removeProperty('background-color');
     document.body.style.removeProperty('background-color');
-    console.log('[TradeAudit] fullscreen bg cleared');
+    console.log('[TradeAudit] fullscreen bg cleared, theme CSS restored');
   }
 
   // Path A: Browser Fullscreen API
