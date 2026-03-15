@@ -135,35 +135,26 @@ if (window.parent !== window) {
   // Logs every click so we can see exactly what element is being clicked in the console.
   document.addEventListener('click', function(e) {
     var el = e.target;
-    console.log('[TradeAudit] click fired on:', el.tagName, '| data-test:', el.getAttribute && el.getAttribute('data-test'), '| class:', el.className && el.className.toString && el.className.toString().substring(0,80));
-    var depth = 0;
     while (el && el !== document.body) {
-      depth++;
       var dt = el.getAttribute && el.getAttribute('data-test');
       var titleAttr = (el.getAttribute && el.getAttribute('title')) || '';
       var cls = (el.className && typeof el.className === 'string') ? el.className : '';
-      // Log first 5 levels so we can see the ancestor chain
-      if (depth <= 5) {
-        console.log('[TradeAudit]   depth=' + depth, el.tagName, '| dt=' + dt, '| title=' + titleAttr.substring(0,60), '| cls=' + cls.substring(0,60));
-      }
-      // Logs revealed: class is "editable-title superset-HASH" and container is "header-title"
+      // Block chart title navigation (classes confirmed via console logs)
       if (dt === 'editable-title' ||
           cls.indexOf('editable-title') !== -1 ||
           cls.indexOf('header-title') !== -1 ||
           titleAttr.toLowerCase().indexOf('click to edit') !== -1 ||
           cls.indexOf('chart-header__title') !== -1 ||
           (el.tagName === 'H3' && el.closest && el.closest('[class*="chart-header"]'))) {
-        console.log('[TradeAudit] BLOCKED chart title click at depth=' + depth, '| el:', el.tagName, '| cls:', cls.substring(0,60));
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
         return;
       }
-      // Also block any <a> with internal href
+      // Block <a> with internal href
       if (el.tagName === 'A') {
         var href = el.getAttribute('href') || '';
         if (href && href !== '#' && !href.startsWith('#')) {
-          console.log('[TradeAudit] BLOCKED link click:', href);
           e.preventDefault();
           e.stopPropagation();
           return;
@@ -171,7 +162,6 @@ if (window.parent !== window) {
       }
       el = el.parentElement;
     }
-    console.log('[TradeAudit] click NOT blocked (walked ' + depth + ' levels)');
   }, true);
 
   // 2. Block window.open
@@ -330,7 +320,6 @@ if (window.parent !== window) {
           ? titleEl.firstChild.textContent.trim()
           : (titleEl.innerText || '').split('\\n')[0].trim());
       if (!text) return;
-      console.log('[TradeAudit] menu item text:', JSON.stringify(text)); // log ALL items for debugging
       var shouldHide = HIDE_MENU_TEXTS.some(function(t){ return text.indexOf(t) !== -1; })
         // Hide "Cached …" / "Fetched …" freshness info rows regardless of language
         || /cached|fetched|updated|en cach|actualizado/i.test(text)
@@ -392,6 +381,7 @@ if (window.parent !== window) {
     'Share permalink by email': 'Compartir por correo',
     'Export to .CSV': 'Exportar a CSV',
     'Export to .XLSX': 'Exportar a Excel',
+    'Export to Excel': 'Exportar a Excel',
     'Export to original format': 'Exportar formato original',
     'Download as image': 'Descargar como imagen',
     'Copy to clipboard': 'Copiar al portapapeles',
