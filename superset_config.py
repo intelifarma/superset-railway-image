@@ -458,58 +458,107 @@ if (window.parent !== window) {
   });
 })();
 
-// Fullscreen: inject a high-specificity <style> that beats TRANSPARENT_BG's !important rules.
-// CSS specificity: :fullscreen div[class] = (0,2,1) > div[class*="..."] = (0,1,1)
-// Also set inline !important on all ancestors (inline always beats any stylesheet rule).
+// Fullscreen background fix.
+// Two paths handled:
+//   A) Browser Fullscreen API (requestFullscreen) — fires fullscreenchange event
+//   B) Superset CSS fullscreen (classList toggle) — no event fires, detected via MutationObserver
 (function(){
+  // Diagnostic: log fullscreen capability 2s after page load
+  setTimeout(function() {
+    console.log('[TradeAudit] fullscreenEnabled:', document.fullscreenEnabled,
+      '| webkitFullscreenEnabled:', !!document.webkitFullscreenEnabled);
+  }, 2000);
+
   var fsStyleEl = null;
 
+  function getBg() {
+    var theme = sessionStorage.getItem('_embedded_theme') || 'light';
+    return theme === 'dark' ? '#141414' : '#f5f5f5';
+  }
+
+  function applyFullscreenBg(el) {
+    var bg = getBg();
+    // 1. High-specificity stylesheet (covers :fullscreen children)
+    if (!fsStyleEl) {
+      fsStyleEl = document.createElement('style');
+      fsStyleEl.id = 'ta-fullscreen-style';
+      document.head.appendChild(fsStyleEl);
+    }
+    fsStyleEl.textContent = [
+      ':fullscreen, :-webkit-full-screen, :-moz-full-screen { background-color: ' + bg + ' !important; }',
+      ':fullscreen *, :-webkit-full-screen * { background-color: ' + bg + ' !important; }',
+      ':fullscreen canvas, :-webkit-full-screen canvas { background: ' + bg + ' !important; }',
+      '::backdrop { background-color: ' + bg + ' !important; }'
+    ].join('\\n');
+    // 2. Inline overrides: walk UP the tree from fullscreen element to root
+    document.documentElement.style.setProperty('background-color', bg, 'important');
+    document.body.style.setProperty('background-color', bg, 'important');
+    var cur = el || document.body;
+    while (cur && cur !== document.documentElement) {
+      cur.style.setProperty('background-color', bg, 'important');
+      cur = cur.parentElement;
+    }
+    console.log('[TradeAudit] fullscreen bg applied: bg=', bg, '| el:', el ? el.tagName + '#' + (el.id||'') : 'body');
+  }
+
+  function clearFullscreenBg() {
+    if (fsStyleEl) fsStyleEl.textContent = '';
+    document.documentElement.style.removeProperty('background-color');
+    document.body.style.removeProperty('background-color');
+    console.log('[TradeAudit] fullscreen bg cleared');
+  }
+
+  // Path A: Browser Fullscreen API
   function onFullscreenChange() {
     var el = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement;
-    var theme = sessionStorage.getItem('_embedded_theme') || 'light';
-    var bg = theme === 'dark' ? '#141414' : '#f5f5f5';
-    console.log('[TradeAudit] fullscreenchange | el:', el ? (el.tagName + ' id=' + el.id + ' cls=' + (el.className||'').toString().substring(0,80)) : 'null (exiting)', '| theme:', theme, '| bg:', bg);
-
+    console.log('[TradeAudit] fullscreenchange | el:', el ? (el.tagName + '#' + (el.id||'') + ' cls=' + (el.className||'').toString().substring(0,60)) : 'null (exiting)');
     if (el) {
-      // 1. Inject high-specificity stylesheet rules
-      if (!fsStyleEl) {
-        fsStyleEl = document.createElement('style');
-        fsStyleEl.id = 'ta-fullscreen-style';
-        document.head.appendChild(fsStyleEl);
-      }
-      fsStyleEl.textContent = [
-        ':fullscreen, :-webkit-full-screen, :-moz-full-screen { background-color: ' + bg + ' !important; }',
-        ':fullscreen div[class], :-webkit-full-screen div[class] { background-color: ' + bg + ' !important; }',
-        ':fullscreen canvas, :-webkit-full-screen canvas { background-color: ' + bg + ' !important; }',
-        'html:has(:fullscreen), body:has(:fullscreen) { background-color: ' + bg + ' !important; }'
-      ].join('\\n');
-      console.log('[TradeAudit] fullscreen style injected:', fsStyleEl.textContent.substring(0,120));
-
-      // 2. Inline !important on every ancestor (inline beats any stylesheet rule)
-      document.documentElement.style.setProperty('background-color', bg, 'important');
-      document.body.style.setProperty('background-color', bg, 'important');
-      var ancestorCount = 0;
-      var cur = el;
-      while (cur && cur !== document.documentElement) {
-        cur.style.setProperty('background-color', bg, 'important');
-        cur = cur.parentElement;
-        ancestorCount++;
-      }
-      // Verify: read back computed style
-      var computed = window.getComputedStyle(el).backgroundColor;
-      console.log('[TradeAudit] fullscreen el computed bg AFTER fix:', computed, '| ancestors patched:', ancestorCount);
-      console.log('[TradeAudit] fullscreen body computed bg:', window.getComputedStyle(document.body).backgroundColor);
+      applyFullscreenBg(el);
     } else {
-      // Exiting fullscreen — clear injected rules and inline overrides
-      if (fsStyleEl) fsStyleEl.textContent = '';
-      document.documentElement.style.removeProperty('background-color');
-      document.body.style.removeProperty('background-color');
-      console.log('[TradeAudit] fullscreen exited, styles cleared');
+      clearFullscreenBg();
     }
   }
   document.addEventListener('fullscreenchange', onFullscreenChange);
   document.addEventListener('webkitfullscreenchange', onFullscreenChange);
   document.addEventListener('mozfullscreenchange', onFullscreenChange);
+
+  // Path A2: Patch Element.prototype.requestFullscreen so bg is applied immediately
+  // (before fullscreenchange fires, to prevent a flash of transparent content)
+  var _origReqFS = Element.prototype.requestFullscreen;
+  if (_origReqFS) {
+    Element.prototype.requestFullscreen = function(opts) {
+      console.log('[TradeAudit] requestFullscreen called on:', this.tagName + '#' + (this.id||''));
+      applyFullscreenBg(this);
+      return _origReqFS.call(this, opts);
+    };
+  }
+  var _origExitFS = document.exitFullscreen ? document.exitFullscreen.bind(document) : null;
+  if (_origExitFS) {
+    document.exitFullscreen = function() {
+      clearFullscreenBg();
+      return _origExitFS();
+    };
+  }
+
+  // Path B: Superset CSS fullscreen (adds class like "superset-xt-full" or inline position:fixed)
+  // Watch for any element whose className gains the word "fullscreen" (case-insensitive)
+  var _prevFullscreenEl = null;
+  new MutationObserver(function(mutations) {
+    mutations.forEach(function(m) {
+      if (m.type !== 'attributes') return;
+      var el = m.target;
+      var cls = (el.className && typeof el.className === 'string') ? el.className.toLowerCase() : '';
+      var hasFullscreen = cls.indexOf('fullscreen') !== -1 || cls.indexOf('full-screen') !== -1;
+      if (hasFullscreen && el !== _prevFullscreenEl) {
+        _prevFullscreenEl = el;
+        console.log('[TradeAudit] CSS fullscreen class detected on:', el.tagName + ' cls=' + el.className.substring(0,80));
+        applyFullscreenBg(el);
+      } else if (!hasFullscreen && el === _prevFullscreenEl) {
+        _prevFullscreenEl = null;
+        clearFullscreenBg();
+      }
+    });
+  }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['class'] });
 })();
 
 // Intercept non-critical API calls that fail for guest tokens
