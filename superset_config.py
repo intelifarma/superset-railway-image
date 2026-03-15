@@ -128,25 +128,31 @@ if (window.parent !== window) {
 
 // Block ALL navigation out of the embedded iframe
 (function(){
+  function isExternalNav(url) {
+    if (!url || typeof url !== 'string') return false;
+    return url.indexOf('/explore') !== -1 || url.indexOf('/chart/') !== -1 ||
+           (url.indexOf('/superset/') !== -1 && url.indexOf('/embedded/') === -1);
+  }
+
   // 1. Block <a> link clicks
   document.addEventListener('click', function(e) {
     var a = e.target.closest('a[href]');
     if (!a) return;
     var href = a.getAttribute('href') || '';
     if (href !== '#' && !href.startsWith('#')) {
-      e.preventDefault();
-      e.stopPropagation();
+      console.log('[TradeAudit] blocked link click:', href);
+      e.preventDefault(); e.stopPropagation();
     }
   }, true);
 
-  // 2. Block window.open (ctrl+click, target="_blank")
-  window.open = function() { return null; };
+  // 2. Block window.open
+  window.open = function(u) { console.log('[TradeAudit] blocked window.open:', u); return null; };
 
   // 3. Block location.assign / replace
-  try { window.location.assign = function() {}; } catch(e) {}
-  try { window.location.replace = function() {}; } catch(e) {}
+  try { window.location.assign = function(u) { console.log('[TradeAudit] blocked assign:', u); }; } catch(e) {}
+  try { window.location.replace = function(u) { console.log('[TradeAudit] blocked replace:', u); }; } catch(e) {}
 
-  // 4. Block location.href setter except hash navigation
+  // 4. Block location.href setter
   try {
     var locDesc = Object.getOwnPropertyDescriptor(Location.prototype, 'href');
     if (locDesc && locDesc.set) {
@@ -154,9 +160,24 @@ if (window.parent !== window) {
         get: locDesc.get,
         set: function(v) {
           if (typeof v === 'string' && v.startsWith('#')) locDesc.set.call(this, v);
+          else console.log('[TradeAudit] blocked href=', v);
         }
       });
     }
+  } catch(e) {}
+
+  // 5. Block React Router history.pushState for external paths
+  try {
+    var _push = history.pushState.bind(history);
+    var _rep = history.replaceState.bind(history);
+    history.pushState = function(s, t, url) {
+      if (isExternalNav(url)) { console.log('[TradeAudit] blocked pushState:', url); return; }
+      return _push(s, t, url);
+    };
+    history.replaceState = function(s, t, url) {
+      if (isExternalNav(url)) { console.log('[TradeAudit] blocked replaceState:', url); return; }
+      return _rep(s, t, url);
+    };
   } catch(e) {}
 })();
 
@@ -249,13 +270,21 @@ if (window.parent !== window) {
         el.style.setProperty('display', 'none', 'important');
       });
     });
-    document.querySelectorAll('.ant-dropdown-menu-item, li[role="menuitem"]').forEach(function(li) {
-      var text = li.innerText && li.innerText.trim();
+    // Hide menu items AND submenu parents (Compartir is a submenu, not a plain item)
+    document.querySelectorAll(
+      '.ant-dropdown-menu-item, .ant-dropdown-menu-submenu, li[role="menuitem"]'
+    ).forEach(function(li) {
+      // For submenus, the text is in the title div
+      var titleEl = li.querySelector('.ant-dropdown-menu-submenu-title') || li;
+      var text = (titleEl.firstChild && titleEl.firstChild.nodeType === 3)
+        ? titleEl.firstChild.textContent.trim()
+        : (titleEl.innerText || '').split('\\n')[0].trim();
       if (text && HIDE_MENU_TEXTS.some(function(t){ return text.indexOf(t) !== -1; })) {
+        console.log('[TradeAudit] hiding menu item:', text);
         li.style.setProperty('display', 'none', 'important');
       }
     });
-    // Remove href from ALL internal Superset links — prevents right-click → "Open in new tab"
+    // Remove href from ALL internal Superset links
     document.querySelectorAll('a[href]').forEach(function(a) {
       var href = a.getAttribute('href') || '';
       if (href.startsWith('/') || href.startsWith(window.location.origin)) {
@@ -355,19 +384,27 @@ if (window.parent !== window) {
   });
 })();
 
-// Fullscreen diagnostics
+// Fullscreen: force solid background via JS (CSS :fullscreen alone is unreliable in iframes)
 (function(){
-  function logFullscreen(e) {
+  function onFullscreenChange() {
     var el = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement;
-    console.log('[TradeAudit] fullscreenchange — element:', el ? el.tagName + ' class="' + el.className + '"' : 'none (exited)');
+    var theme = sessionStorage.getItem('_embedded_theme') || 'light';
+    var bg = theme === 'dark' ? '#141414' : '#ffffff';
+    console.log('[TradeAudit] fullscreenchange — el:', el ? el.tagName + '.' + (el.className || '').split(' ')[0] : 'none', '| theme:', theme);
     if (el) {
+      el.style.setProperty('background-color', bg, 'important');
+      el.style.setProperty('background', bg, 'important');
+      // Also fix direct children (chart wrappers)
+      Array.prototype.forEach.call(el.children, function(child) {
+        child.style.setProperty('background-color', bg, 'important');
+      });
       var cs = window.getComputedStyle(el);
-      console.log('[TradeAudit] fullscreen bg:', cs.backgroundColor, '| color:', cs.color);
+      console.log('[TradeAudit] fullscreen bg after fix:', cs.backgroundColor);
     }
   }
-  document.addEventListener('fullscreenchange', logFullscreen);
-  document.addEventListener('webkitfullscreenchange', logFullscreen);
-  document.addEventListener('mozfullscreenchange', logFullscreen);
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+  document.addEventListener('mozfullscreenchange', onFullscreenChange);
 })();
 
 // Intercept non-critical API calls that fail for guest tokens
