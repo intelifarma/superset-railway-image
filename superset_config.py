@@ -132,15 +132,26 @@ if (window.parent !== window) {
 // it via stopImmediatePropagation(). CSS pointer-events:none is added as a second layer.
 (function(){
   // 1. Capture-phase click interceptor — stops chart title navigation before React fires
+  // Logs every click so we can see exactly what element is being clicked in the console.
   document.addEventListener('click', function(e) {
     var el = e.target;
+    console.log('[TradeAudit] click fired on:', el.tagName, '| data-test:', el.getAttribute && el.getAttribute('data-test'), '| class:', el.className && el.className.toString && el.className.toString().substring(0,80));
+    var depth = 0;
     while (el && el !== document.body) {
+      depth++;
       var dt = el.getAttribute && el.getAttribute('data-test');
       var titleAttr = (el.getAttribute && el.getAttribute('title')) || '';
       var cls = (el.className && typeof el.className === 'string') ? el.className : '';
+      // Log first 5 levels so we can see the ancestor chain
+      if (depth <= 5) {
+        console.log('[TradeAudit]   depth=' + depth, el.tagName, '| dt=' + dt, '| title=' + titleAttr.substring(0,60), '| cls=' + cls.substring(0,60));
+      }
       if (dt === 'editable-title' ||
           titleAttr.toLowerCase().indexOf('click to edit') !== -1 ||
-          cls.indexOf('chart-header__title') !== -1) {
+          cls.indexOf('chart-header__title') !== -1 ||
+          (el.tagName === 'H3' && el.closest && el.closest('[class*="chart-header"]')) ||
+          (el.tagName === 'A' && el.closest && el.closest('[class*="chart-header"]'))) {
+        console.log('[TradeAudit] BLOCKED chart title click at depth=' + depth, '| el:', el.tagName, dt || titleAttr.substring(0,40));
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
@@ -150,6 +161,7 @@ if (window.parent !== window) {
       if (el.tagName === 'A') {
         var href = el.getAttribute('href') || '';
         if (href && href !== '#' && !href.startsWith('#')) {
+          console.log('[TradeAudit] BLOCKED link click:', href);
           e.preventDefault();
           e.stopPropagation();
           return;
@@ -157,6 +169,7 @@ if (window.parent !== window) {
       }
       el = el.parentElement;
     }
+    console.log('[TradeAudit] click NOT blocked (walked ' + depth + ' levels)');
   }, true);
 
   // 2. Block window.open
@@ -288,6 +301,18 @@ if (window.parent !== window) {
         if (el.style.display !== 'none') el.style.setProperty('display', 'none', 'important');
       });
     });
+
+    // Force inline pointer-events:none on chart title elements (beats any stylesheet override)
+    document.querySelectorAll(
+      '[data-test="editable-title"], .chart-header__title, .chart-header__title *'
+    ).forEach(function(el) {
+      if (el.style.pointerEvents !== 'none') {
+        el.style.setProperty('pointer-events', 'none', 'important');
+        el.style.cursor = 'default';
+        el.title = ''; // remove tooltip
+      }
+    });
+
     // Hide menu items AND submenu parents (Compartir is a submenu, not a plain item)
     document.querySelectorAll(
       '.ant-dropdown-menu-item, .ant-dropdown-menu-submenu, li[role="menuitem"]'
@@ -299,13 +324,15 @@ if (window.parent !== window) {
         : (titleEl.innerText || '').split('\\n')[0].trim();
       if (!text) return;
       var shouldHide = HIDE_MENU_TEXTS.some(function(t){ return text.indexOf(t) !== -1; })
-        // Also hide "Cached …" / "Fetched …" freshness text rows
-        || /^(Cached|Fetched|Updated|En cach|Actualizado)\b/i.test(text);
+        // Also hide "Cached …" / "Fetched …" freshness info rows regardless of language
+        || /cached|fetched|updated|en cach|actualizado/i.test(text)
+        || /hace (unos|un|[0-9]+)|ago/i.test(text);
       if (shouldHide) {
-        console.log('[TradeAudit] hiding menu item:', text);
+        console.log('[TradeAudit] hiding menu item:', JSON.stringify(text));
         li.style.setProperty('display', 'none', 'important');
       }
     });
+
     // Remove href and title tooltip from ALL internal Superset links
     document.querySelectorAll('a[href]').forEach(function(a) {
       var href = a.getAttribute('href') || '';
@@ -317,11 +344,11 @@ if (window.parent !== window) {
     });
   }
 
-  // Debounced observer — prevents infinite loop when our own style changes trigger mutations
+  // Use 0ms debounce (next tick) — prevents infinite loop AND hides items immediately
   var _hideTimer = null;
   var hideObserver = new MutationObserver(function() {
     if (_hideTimer) return;
-    _hideTimer = setTimeout(function() { _hideTimer = null; hideElements(); }, 80);
+    _hideTimer = setTimeout(function() { _hideTimer = null; hideElements(); }, 0);
   });
   document.addEventListener('DOMContentLoaded', function() {
     hideElements();
@@ -443,6 +470,7 @@ if (window.parent !== window) {
     var el = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement;
     var theme = sessionStorage.getItem('_embedded_theme') || 'light';
     var bg = theme === 'dark' ? '#141414' : '#f5f5f5';
+    console.log('[TradeAudit] fullscreenchange | el:', el ? (el.tagName + ' id=' + el.id + ' cls=' + (el.className||'').toString().substring(0,80)) : 'null (exiting)', '| theme:', theme, '| bg:', bg);
 
     if (el) {
       // 1. Inject high-specificity stylesheet rules
@@ -457,20 +485,28 @@ if (window.parent !== window) {
         ':fullscreen canvas, :-webkit-full-screen canvas { background-color: ' + bg + ' !important; }',
         'html:has(:fullscreen), body:has(:fullscreen) { background-color: ' + bg + ' !important; }'
       ].join('\\n');
+      console.log('[TradeAudit] fullscreen style injected:', fsStyleEl.textContent.substring(0,120));
 
       // 2. Inline !important on every ancestor (inline beats any stylesheet rule)
       document.documentElement.style.setProperty('background-color', bg, 'important');
       document.body.style.setProperty('background-color', bg, 'important');
+      var ancestorCount = 0;
       var cur = el;
       while (cur && cur !== document.documentElement) {
         cur.style.setProperty('background-color', bg, 'important');
         cur = cur.parentElement;
+        ancestorCount++;
       }
+      // Verify: read back computed style
+      var computed = window.getComputedStyle(el).backgroundColor;
+      console.log('[TradeAudit] fullscreen el computed bg AFTER fix:', computed, '| ancestors patched:', ancestorCount);
+      console.log('[TradeAudit] fullscreen body computed bg:', window.getComputedStyle(document.body).backgroundColor);
     } else {
       // Exiting fullscreen — clear injected rules and inline overrides
       if (fsStyleEl) fsStyleEl.textContent = '';
       document.documentElement.style.removeProperty('background-color');
       document.body.style.removeProperty('background-color');
+      console.log('[TradeAudit] fullscreen exited, styles cleared');
     }
   }
   document.addEventListener('fullscreenchange', onFullscreenChange);
