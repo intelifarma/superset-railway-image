@@ -495,10 +495,27 @@ if (window.parent !== window) {
   var fsStyleEl = null;
   var _fsEl = null;
   var _fsAncestors = []; // explicit list — survives React unmounting _fsEl
+  var _exitPoll = null; // interval handle for reliable exit detection
 
   function getBg() {
     var theme = sessionStorage.getItem('_embedded_theme') || 'light';
     return theme === 'dark' ? '#141414' : '#f5f5f5';
+  }
+
+  function startExitPoller() {
+    if (_exitPoll) return; // already running
+    _exitPoll = setInterval(function() {
+      if (!_fsEl) { clearInterval(_exitPoll); _exitPoll = null; return; }
+      var cls = (typeof _fsEl.className === 'string') ? _fsEl.className : '';
+      var inDom = document.body.contains(_fsEl);
+      var hasFadeOut = cls.indexOf('fade-out') !== -1;
+      if (!inDom || !hasFadeOut) {
+        console.log('[TA-FS] >>> EXIT fullscreen detected (poller) | inDom:', inDom, 'hasFadeOut:', hasFadeOut);
+        clearInterval(_exitPoll); _exitPoll = null;
+        clearFullscreenBg();
+      }
+    }, 100);
+    console.log('[TA-FS] exit poller started');
   }
 
   function applyFullscreenBg(el) {
@@ -533,9 +550,11 @@ if (window.parent !== window) {
       cur = cur.parentElement;
     }
     console.log('[TA-FS] set background-color on', _fsAncestors.length, 'ancestor elements, saved refs:', _fsAncestors.length);
+    startExitPoller();
   }
 
   function clearFullscreenBg() {
+    if (_exitPoll) { clearInterval(_exitPoll); _exitPoll = null; }
     console.log('[TA-FS] clearFullscreenBg — _fsAncestors:', _fsAncestors.length, '| _fsEl in DOM:', _fsEl ? document.body.contains(_fsEl) : 'null');
     var themeEl = document.getElementById('tradeaudit-theme');
     if (themeEl) {
