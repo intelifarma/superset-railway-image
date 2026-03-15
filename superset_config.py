@@ -305,9 +305,11 @@ if (window.parent !== window) {
     });
 
     // Hide menu items AND submenu parents
-    document.querySelectorAll(
+    var menuItems = document.querySelectorAll(
       '.ant-dropdown-menu-item, .ant-dropdown-menu-submenu, li[role="menuitem"]'
-    ).forEach(function(li) {
+    );
+    if (menuItems.length > 0) console.log('[TA-MENU] hideElements fired, items found:', menuItems.length);
+    menuItems.forEach(function(li) {
       if (li.style.display === 'none') return; // already hidden — skip to avoid loop
       var titleEl = li.querySelector('.ant-dropdown-menu-submenu-title') || li;
       var titleContent = li.querySelector('.ant-dropdown-menu-title-content');
@@ -318,23 +320,29 @@ if (window.parent !== window) {
           : (titleEl.innerText || '').split('\\n')[0].trim());
       if (!text) return;
 
+      console.log('[TA-MENU] item text:', JSON.stringify(text), '| fullText:', JSON.stringify((li.textContent||'').trim().substring(0,80)));
+
       // "Forzar actualización" must stay visible. Superset appends a freshness span
       // ("Cached hace X" / "Fetched hace X") to the same <li>. Strip the state word
       // prefix so it shows only "hace X minutos/segundos".
       var isForceRefresh = text.indexOf('Forzar') === 0 || text.indexOf('Force') === 0;
       if (isForceRefresh) {
+        console.log('[TA-MENU] isForceRefresh — scanning spans...');
         li.querySelectorAll('span').forEach(function(span) {
           if (span === titleContent) return;
           var spanText = (span.textContent || '').trim();
+          console.log('[TA-MENU]   span text:', JSON.stringify(spanText), 'display:', span.style.display);
           if (!spanText || spanText.indexOf('Forzar') !== -1) return;
           var hasFreshness = /cached|fetched|updated|en cach/i.test(spanText) ||
                              /hace (unos|un|[0-9]+)|ago/i.test(spanText);
+          console.log('[TA-MENU]   hasFreshness:', hasFreshness);
           if (!hasFreshness) return;
           // Strip the state word, keep only the relative time ("hace X")
           var cleaned = spanText
             .replace(/^(cached|fetched|updated|en cach[eé]|actualizado)\s*/i, '')
             .replace(/\s*(ago)$/i, '')
             .trim();
+          console.log('[TA-MENU]   cleaned:', JSON.stringify(cleaned));
           if (cleaned && span.textContent.trim() !== cleaned) span.textContent = cleaned;
           if (span.style.display === 'none') span.style.removeProperty('display');
         });
@@ -344,6 +352,7 @@ if (window.parent !== window) {
       var shouldHide = HIDE_MENU_TEXTS.some(function(t){ return text.indexOf(t) !== -1; })
         || /cached|fetched|updated|en cach|actualizado/i.test(text)
         || /hace (unos|un|[0-9]+)|ago/i.test(text);
+      console.log('[TA-MENU] shouldHide:', shouldHide);
       if (shouldHide) {
         li.style.setProperty('display', 'none', 'important');
       }
@@ -492,6 +501,7 @@ if (window.parent !== window) {
   function applyFullscreenBg(el) {
     _fsEl = el || null;
     var bg = getBg();
+    console.log('[TA-FS] applyFullscreenBg — bg:', bg, '| el:', el ? el.className.substring(0,60) : 'null');
     // Swap transparent CSS for solid — avoids the !important specificity war entirely
     var themeEl = document.getElementById('tradeaudit-theme');
     if (themeEl && !themeEl.getAttribute('data-fs-saved')) {
@@ -499,6 +509,9 @@ if (window.parent !== window) {
       themeEl.textContent = themeEl.textContent
         .replace(/background:\s*transparent\s*!important/g,   'background: ' + bg + ' !important')
         .replace(/background-color:\s*transparent\s*!important/g, 'background-color: ' + bg + ' !important');
+      console.log('[TA-FS] theme CSS swapped to solid bg');
+    } else {
+      console.log('[TA-FS] theme already saved or not found, themeEl:', !!themeEl, 'data-fs-saved:', themeEl && themeEl.getAttribute('data-fs-saved') ? 'yes' : 'no');
     }
     if (!fsStyleEl) {
       fsStyleEl = document.createElement('style');
@@ -510,17 +523,27 @@ if (window.parent !== window) {
     document.documentElement.style.setProperty('background-color', bg, 'important');
     document.body.style.setProperty('background-color', bg, 'important');
     var cur = el || document.body;
+    var depth = 0;
     while (cur && cur !== document.documentElement) {
       cur.style.setProperty('background-color', bg, 'important');
+      depth++;
       cur = cur.parentElement;
     }
+    console.log('[TA-FS] set background-color on', depth, 'ancestor elements');
   }
 
   function clearFullscreenBg() {
+    console.log('[TA-FS] clearFullscreenBg — _fsEl:', _fsEl ? _fsEl.className.substring(0,60) : 'null');
     var themeEl = document.getElementById('tradeaudit-theme');
     if (themeEl) {
       var saved = themeEl.getAttribute('data-fs-saved');
-      if (saved) { themeEl.textContent = saved; themeEl.removeAttribute('data-fs-saved'); }
+      if (saved) {
+        themeEl.textContent = saved;
+        themeEl.removeAttribute('data-fs-saved');
+        console.log('[TA-FS] theme CSS restored');
+      } else {
+        console.log('[TA-FS] WARNING: no data-fs-saved found on theme element');
+      }
     }
     if (fsStyleEl) fsStyleEl.textContent = '';
     document.documentElement.style.removeProperty('background-color');
@@ -529,10 +552,13 @@ if (window.parent !== window) {
     // Without this, intermediate elements (row div, grid div, etc.) keep the inline style
     // which interferes with chart header button visibility after exiting fullscreen.
     var cur = _fsEl;
+    var depth = 0;
     while (cur && cur !== document.documentElement) {
       cur.style.removeProperty('background-color');
+      depth++;
       cur = cur.parentElement;
     }
+    console.log('[TA-FS] removed background-color from', depth, 'ancestor elements');
     _fsEl = null;
   }
 
@@ -558,17 +584,23 @@ if (window.parent !== window) {
   }
 
   // Detect Superset CSS fullscreen: 'fade-out' class on 'dashboard-component-chart-holder'
+  console.log('[TA-FS] MutationObserver for fullscreen registered');
   new MutationObserver(function(mutations) {
     mutations.forEach(function(m) {
       if (m.type !== 'attributes' || m.attributeName !== 'class') return;
       var el = m.target;
       var cls = (el.className && typeof el.className === 'string') ? el.className : '';
       if (cls.indexOf('dashboard-component-chart-holder') === -1) return;
+      console.log('[TA-FS] chart-holder class changed:', cls.substring(0,120));
       if (cls.indexOf('fade-out') !== -1) {
+        console.log('[TA-FS] >>> ENTER fullscreen detected');
         applyFullscreenBg(el);
       } else if (document.getElementById('tradeaudit-theme') &&
                  document.getElementById('tradeaudit-theme').getAttribute('data-fs-saved')) {
+        console.log('[TA-FS] >>> EXIT fullscreen detected');
         clearFullscreenBg();
+      } else {
+        console.log('[TA-FS] chart-holder class changed but no fs-saved — ignoring');
       }
     });
   }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['class'] });
