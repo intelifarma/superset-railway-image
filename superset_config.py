@@ -555,25 +555,38 @@ if (window.parent !== window) {
     };
   }
 
-  // Path B: Superset CSS fullscreen (adds class like "superset-xt-full" or inline position:fixed)
-  // Watch for any element whose className gains the word "fullscreen" (case-insensitive)
-  var _prevFullscreenEl = null;
-  new MutationObserver(function(mutations) {
-    mutations.forEach(function(m) {
-      if (m.type !== 'attributes') return;
-      var el = m.target;
-      var cls = (el.className && typeof el.className === 'string') ? el.className.toLowerCase() : '';
-      var hasFullscreen = cls.indexOf('fullscreen') !== -1 || cls.indexOf('full-screen') !== -1;
-      if (hasFullscreen && el !== _prevFullscreenEl) {
-        _prevFullscreenEl = el;
-        console.log('[TradeAudit] CSS fullscreen class detected on:', el.tagName + ' cls=' + el.className.substring(0,80));
-        applyFullscreenBg(el);
-      } else if (!hasFullscreen && el === _prevFullscreenEl) {
-        _prevFullscreenEl = null;
-        clearFullscreenBg();
+  // Path B: detect Superset's internal CSS fullscreen by watching DOM changes
+  // after the fullscreen button is clicked.
+  document.addEventListener('click', function(e) {
+    var el = e.target;
+    for (var i = 0; i < 6 && el; i++, el = el.parentElement) {
+      var label = (el.getAttribute && el.getAttribute('aria-label')) || '';
+      var title = (el.getAttribute && el.getAttribute('title')) || '';
+      var combined = (label + ' ' + title).toLowerCase();
+      if (combined.indexOf('fullscreen') !== -1 || combined.indexOf('pantalla') !== -1 ||
+          combined.indexOf('expand') !== -1 || combined.indexOf('full') !== -1) {
+        console.log('[TradeAudit] FULLSCREEN BTN CLICK detected: aria-label="' + label + '" title="' + title + '"');
+        // Watch ALL DOM attribute+style changes for 3s to find what Superset does
+        var detective = new MutationObserver(function(muts) {
+          muts.forEach(function(m) {
+            var t = m.target;
+            var val = m.attributeName === 'style'
+              ? (t.style && t.style.cssText ? t.style.cssText.substring(0, 120) : '')
+              : (t.getAttribute && t.getAttribute(m.attributeName) || '').substring(0, 120);
+            console.log('[TradeAudit] DOM-CHANGE attr=' + m.attributeName,
+              t.tagName + (t.id ? '#'+t.id : '') + ' cls=' + ((t.className && typeof t.className === 'string') ? t.className.substring(0,60) : ''),
+              '→', val);
+          });
+        });
+        detective.observe(document.documentElement, { subtree: true, attributes: true });
+        setTimeout(function() {
+          detective.disconnect();
+          console.log('[TradeAudit] FULLSCREEN detective done');
+        }, 3000);
+        break;
       }
-    });
-  }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    }
+  }, true);
 })();
 
 // Intercept non-critical API calls that fail for guest tokens
