@@ -494,35 +494,19 @@ if (window.parent !== window) {
 (function(){
   var fsStyleEl = null;
   var _fsEl = null;
-  var _fsAncestors = []; // explicit list — survives React unmounting _fsEl
-  var _exitPoll = null; // interval handle for reliable exit detection
+  var _exitPoll = null;
 
   function getBg() {
     var theme = sessionStorage.getItem('_embedded_theme') || 'light';
     return theme === 'dark' ? '#141414' : '#f5f5f5';
   }
 
-  function startExitPoller() {
-    if (_exitPoll) return; // already running
-    _exitPoll = setInterval(function() {
-      if (!_fsEl) { clearInterval(_exitPoll); _exitPoll = null; return; }
-      var cls = (typeof _fsEl.className === 'string') ? _fsEl.className : '';
-      var inDom = document.body.contains(_fsEl);
-      var hasFadeOut = cls.indexOf('fade-out') !== -1;
-      if (!inDom || !hasFadeOut) {
-        console.log('[TA-FS] >>> EXIT fullscreen detected (poller) | inDom:', inDom, 'hasFadeOut:', hasFadeOut);
-        clearInterval(_exitPoll); _exitPoll = null;
-        clearFullscreenBg();
-      }
-    }, 100);
-    console.log('[TA-FS] exit poller started');
-  }
-
   function applyFullscreenBg(el) {
+    // Stop any existing poller before (re)starting
+    if (_exitPoll) { clearInterval(_exitPoll); _exitPoll = null; }
     _fsEl = el || null;
-    _fsAncestors = [];
     var bg = getBg();
-    console.log('[TA-FS] applyFullscreenBg — bg:', bg, '| el:', el ? el.className.substring(0,60) : 'null');
+    console.log('[TA-FS] ENTER | bg:', bg, '| el:', el ? el.className.substring(0,60) : 'null');
     // Swap transparent CSS for solid — avoids the !important specificity war entirely
     var themeEl = document.getElementById('tradeaudit-theme');
     if (themeEl && !themeEl.getAttribute('data-fs-saved')) {
@@ -530,9 +514,7 @@ if (window.parent !== window) {
       themeEl.textContent = themeEl.textContent
         .replace(/background:\s*transparent\s*!important/g,   'background: ' + bg + ' !important')
         .replace(/background-color:\s*transparent\s*!important/g, 'background-color: ' + bg + ' !important');
-      console.log('[TA-FS] theme CSS swapped to solid bg');
-    } else {
-      console.log('[TA-FS] theme already saved or not found, themeEl:', !!themeEl, 'data-fs-saved:', themeEl && themeEl.getAttribute('data-fs-saved') ? 'yes' : 'no');
+      console.log('[TA-FS] theme CSS swapped');
     }
     if (!fsStyleEl) {
       fsStyleEl = document.createElement('style');
@@ -543,19 +525,27 @@ if (window.parent !== window) {
       ':fullscreen, :-webkit-full-screen { background-color: ' + bg + ' !important; }';
     document.documentElement.style.setProperty('background-color', bg, 'important');
     document.body.style.setProperty('background-color', bg, 'important');
-    var cur = el || document.body;
-    while (cur && cur !== document.documentElement) {
-      cur.style.setProperty('background-color', bg, 'important');
-      _fsAncestors.push(cur); // save ref so cleanup works even after React unmounts _fsEl
-      cur = cur.parentElement;
-    }
-    console.log('[TA-FS] set background-color on', _fsAncestors.length, 'ancestor elements, saved refs:', _fsAncestors.length);
-    startExitPoller();
+    // NOTE: No inline styles on ancestors — theme CSS swap covers them.
+    // Ancestor inline styles caused the ⋮ button to be hidden after exit.
+
+    // Poll every 100ms for exit — reliable regardless of how React remounts components
+    _exitPoll = setInterval(function() {
+      if (!_fsEl) { clearInterval(_exitPoll); _exitPoll = null; return; }
+      var cls = (typeof _fsEl.className === 'string') ? _fsEl.className : '';
+      var inDom = document.body.contains(_fsEl);
+      var hasFadeOut = cls.indexOf('fade-out') !== -1;
+      if (!inDom || !hasFadeOut) {
+        console.log('[TA-FS] EXIT detected (poller) | inDom:', inDom, 'hasFadeOut:', hasFadeOut);
+        clearInterval(_exitPoll); _exitPoll = null;
+        clearFullscreenBg();
+      }
+    }, 100);
+    console.log('[TA-FS] exit poller started');
   }
 
   function clearFullscreenBg() {
     if (_exitPoll) { clearInterval(_exitPoll); _exitPoll = null; }
-    console.log('[TA-FS] clearFullscreenBg — _fsAncestors:', _fsAncestors.length, '| _fsEl in DOM:', _fsEl ? document.body.contains(_fsEl) : 'null');
+    console.log('[TA-FS] EXIT | clearing');
     var themeEl = document.getElementById('tradeaudit-theme');
     if (themeEl) {
       var saved = themeEl.getAttribute('data-fs-saved');
@@ -564,18 +554,12 @@ if (window.parent !== window) {
         themeEl.removeAttribute('data-fs-saved');
         console.log('[TA-FS] theme CSS restored');
       } else {
-        console.log('[TA-FS] WARNING: no data-fs-saved found on theme element');
+        console.log('[TA-FS] WARNING: no data-fs-saved');
       }
     }
     if (fsStyleEl) fsStyleEl.textContent = '';
     document.documentElement.style.removeProperty('background-color');
     document.body.style.removeProperty('background-color');
-    // Use saved ancestor list — works even if _fsEl was unmounted by React (parentElement=null)
-    _fsAncestors.forEach(function(ancestor) {
-      ancestor.style.removeProperty('background-color');
-    });
-    console.log('[TA-FS] removed background-color from', _fsAncestors.length, 'saved ancestor elements');
-    _fsAncestors = [];
     _fsEl = null;
   }
 
