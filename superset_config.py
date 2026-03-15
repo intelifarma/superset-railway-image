@@ -555,33 +555,41 @@ if (window.parent !== window) {
     };
   }
 
-  // Path B: detect Superset's internal CSS fullscreen by watching DOM changes
-  // after the fullscreen button is clicked.
+  // Path B: detect Superset's fullscreen by watching DOM after "Pantalla completa" click.
+  // Checks TEXT CONTENT (not aria-label) and watches both attribute + childList mutations.
   document.addEventListener('click', function(e) {
     var el = e.target;
-    for (var i = 0; i < 6 && el; i++, el = el.parentElement) {
-      var label = (el.getAttribute && el.getAttribute('aria-label')) || '';
-      var title = (el.getAttribute && el.getAttribute('title')) || '';
-      var combined = (label + ' ' + title).toLowerCase();
-      if (combined.indexOf('fullscreen') !== -1 || combined.indexOf('pantalla') !== -1 ||
-          combined.indexOf('expand') !== -1 || combined.indexOf('full') !== -1) {
-        console.log('[TradeAudit] FULLSCREEN BTN CLICK detected: aria-label="' + label + '" title="' + title + '"');
-        // Watch ALL DOM attribute+style changes for 3s to find what Superset does
+    // Walk up to check if this click is on/inside a menu item with fullscreen text
+    for (var i = 0; i < 8 && el; i++, el = el.parentElement) {
+      var text = ((el.textContent || el.innerText || '') + ' ' +
+                  (el.getAttribute && el.getAttribute('aria-label') || '') + ' ' +
+                  (el.getAttribute && el.getAttribute('title') || '')).toLowerCase();
+      if (text.indexOf('pantalla') !== -1 || text.indexOf('fullscreen') !== -1) {
+        var displayText = (el.textContent || '').trim().substring(0, 40);
+        console.log('[TradeAudit] FULLSCREEN MENU ITEM CLICKED text="' + displayText + '" tag=' + el.tagName);
         var detective = new MutationObserver(function(muts) {
           muts.forEach(function(m) {
-            var t = m.target;
-            var val = m.attributeName === 'style'
-              ? (t.style && t.style.cssText ? t.style.cssText.substring(0, 120) : '')
-              : (t.getAttribute && t.getAttribute(m.attributeName) || '').substring(0, 120);
-            console.log('[TradeAudit] DOM-CHANGE attr=' + m.attributeName,
-              t.tagName + (t.id ? '#'+t.id : '') + ' cls=' + ((t.className && typeof t.className === 'string') ? t.className.substring(0,60) : ''),
-              '→', val);
+            if (m.type === 'childList') {
+              m.addedNodes.forEach(function(node) {
+                if (node.nodeType !== 1) return;
+                var st = (node.getAttribute && node.getAttribute('style')) || '';
+                var cls = (node.className && typeof node.className === 'string') ? node.className.substring(0,100) : '';
+                console.log('[TradeAudit] NEW NODE added: ' + node.tagName + '#' + (node.id||'') +
+                  ' cls=' + cls + ' style=' + st.substring(0,100));
+              });
+            } else if (m.type === 'attributes') {
+              var t = m.target;
+              var val = (t.getAttribute && t.getAttribute(m.attributeName) || '').substring(0,120);
+              var cls = (t.className && typeof t.className === 'string') ? t.className.substring(0,60) : '';
+              console.log('[TradeAudit] ATTR-CHANGE ' + m.attributeName + '=' + val +
+                ' on ' + t.tagName + '#' + (t.id||'') + ' cls=' + cls);
+            }
           });
         });
-        detective.observe(document.documentElement, { subtree: true, attributes: true });
+        detective.observe(document.documentElement, { subtree: true, attributes: true, childList: true });
         setTimeout(function() {
           detective.disconnect();
-          console.log('[TradeAudit] FULLSCREEN detective done');
+          console.log('[TradeAudit] detective done');
         }, 3000);
         break;
       }
