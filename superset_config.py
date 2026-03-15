@@ -327,24 +327,26 @@ if (window.parent !== window) {
       // prefix so it shows only "hace X minutos/segundos".
       var isForceRefresh = text.indexOf('Forzar') === 0 || text.indexOf('Force') === 0;
       if (isForceRefresh) {
-        console.log('[TA-MENU] isForceRefresh — scanning spans...');
-        li.querySelectorAll('span').forEach(function(span) {
-          if (span === titleContent) return;
-          var spanText = (span.textContent || '').trim();
-          console.log('[TA-MENU]   span text:', JSON.stringify(spanText), 'display:', span.style.display);
-          if (!spanText || spanText.indexOf('Forzar') !== -1) return;
-          var hasFreshness = /cached|fetched|updated|en cach/i.test(spanText) ||
-                             /hace (unos|un|[0-9]+)|ago/i.test(spanText);
+        // Log the actual inner HTML so we can see the element structure
+        console.log('[TA-MENU] isForceRefresh — li innerHTML:', li.innerHTML.substring(0, 300));
+        // Use querySelectorAll('*') — Superset may use div/em/small, not span, for freshness text
+        li.querySelectorAll('*').forEach(function(el) {
+          if (el === titleContent) return; // skip the title wrapper itself
+          var elText = (el.textContent || '').trim();
+          console.log('[TA-MENU]   el:', el.tagName, 'cls:', (el.className||'').substring(0,40), 'text:', JSON.stringify(elText), 'display:', el.style.display);
+          if (!elText || elText.indexOf('Forzar') !== -1) return;
+          var hasFreshness = /cached|fetched|updated|en cach/i.test(elText) ||
+                             /hace (unos|un|[0-9]+)|ago/i.test(elText);
           console.log('[TA-MENU]   hasFreshness:', hasFreshness);
           if (!hasFreshness) return;
           // Strip the state word, keep only the relative time ("hace X")
-          var cleaned = spanText
+          var cleaned = elText
             .replace(/^(cached|fetched|updated|en cach[eé]|actualizado)\s*/i, '')
             .replace(/\s*(ago)$/i, '')
             .trim();
           console.log('[TA-MENU]   cleaned:', JSON.stringify(cleaned));
-          if (cleaned && span.textContent.trim() !== cleaned) span.textContent = cleaned;
-          if (span.style.display === 'none') span.style.removeProperty('display');
+          if (cleaned && el.textContent.trim() !== cleaned) el.textContent = cleaned;
+          if (el.style.display === 'none') el.style.removeProperty('display');
         });
         return;
       }
@@ -591,16 +593,18 @@ if (window.parent !== window) {
       var el = m.target;
       var cls = (el.className && typeof el.className === 'string') ? el.className : '';
       if (cls.indexOf('dashboard-component-chart-holder') === -1) return;
-      console.log('[TA-FS] chart-holder class changed:', cls.substring(0,120));
-      if (cls.indexOf('fade-out') !== -1) {
+      var hasFadeOut = cls.indexOf('fade-out') !== -1;
+      var themeElNow = document.getElementById('tradeaudit-theme');
+      var fsSaved = themeElNow && themeElNow.getAttribute('data-fs-saved') ? 'yes' : 'no';
+      console.log('[TA-FS] chart-holder class changed | fade-out:', hasFadeOut, '| data-fs-saved:', fsSaved, '| cls:', cls.substring(0,120));
+      if (hasFadeOut) {
         console.log('[TA-FS] >>> ENTER fullscreen detected');
         applyFullscreenBg(el);
-      } else if (document.getElementById('tradeaudit-theme') &&
-                 document.getElementById('tradeaudit-theme').getAttribute('data-fs-saved')) {
-        console.log('[TA-FS] >>> EXIT fullscreen detected');
+      } else if (themeElNow && fsSaved === 'yes') {
+        console.log('[TA-FS] >>> EXIT fullscreen detected — calling clearFullscreenBg');
         clearFullscreenBg();
       } else {
-        console.log('[TA-FS] chart-holder class changed but no fs-saved — ignoring');
+        console.log('[TA-FS] chart-holder changed but fade-out absent and no fs-saved — nothing to do');
       }
     });
   }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['class'] });
