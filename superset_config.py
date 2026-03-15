@@ -318,21 +318,25 @@ if (window.parent !== window) {
           : (titleEl.innerText || '').split('\\n')[0].trim());
       if (!text) return;
 
-      // "Forzar actualización" must stay visible — Superset appends the freshness
-      // timestamp ("Fetched hace X") to the same element's text. Hide only that
-      // sub-span, not the whole menu item.
-      var isFreshnessSuffix = /cached|fetched|updated|en cach/i.test(text) ||
-                              /hace (unos|un|[0-9]+)|ago/i.test(text);
+      // "Forzar actualización" must stay visible. Superset appends a freshness span
+      // ("Cached hace X" / "Fetched hace X") to the same <li>. Strip the state word
+      // prefix so it shows only "hace X minutos/segundos".
       var isForceRefresh = text.indexOf('Forzar') === 0 || text.indexOf('Force') === 0;
-      if (isForceRefresh && isFreshnessSuffix) {
-        // Hide only the freshness child span(s), keep the action label
+      if (isForceRefresh) {
         li.querySelectorAll('span').forEach(function(span) {
           if (span === titleContent) return;
           var spanText = (span.textContent || '').trim();
-          if (spanText && (/cached|fetched|updated/i.test(spanText) || /hace (unos|un|[0-9]+)|ago/i.test(spanText))
-              && spanText.indexOf('Forzar') === -1) {
-            if (span.style.display !== 'none') span.style.setProperty('display', 'none', 'important');
-          }
+          if (!spanText || spanText.indexOf('Forzar') !== -1) return;
+          var hasFreshness = /cached|fetched|updated|en cach/i.test(spanText) ||
+                             /hace (unos|un|[0-9]+)|ago/i.test(spanText);
+          if (!hasFreshness) return;
+          // Strip the state word, keep only the relative time ("hace X")
+          var cleaned = spanText
+            .replace(/^(cached|fetched|updated|en cach[eé]|actualizado)\s*/i, '')
+            .replace(/\s*(ago)$/i, '')
+            .trim();
+          if (cleaned && span.textContent.trim() !== cleaned) span.textContent = cleaned;
+          if (span.style.display === 'none') span.style.removeProperty('display');
         });
         return;
       }
