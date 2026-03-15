@@ -233,29 +233,29 @@ if (window.parent !== window) {
 // Hide edit/share/embed controls — these should not be visible to end users
 (function(){
   var HIDE_SELECTORS = [
-    // Edit dashboard button (top-right)
     '[data-test="edit-alt-button"]',
-    // "+" add chart/tab buttons
     '[data-test="dashboard-header-add-component"]',
     '[aria-label="Add components"]',
   ];
 
-  // Text fragments in menu items to hide (matched against innerText)
-  var HIDE_MENU_TEXTS = ['Share', 'Embed dashboard', 'Save as', 'Edit dashboard'];
+  var HIDE_MENU_TEXTS = ['Share', 'Embed dashboard', 'Save as', 'Edit dashboard', 'Compartir', 'Editar dashboard'];
 
   function hideElements() {
-    // Hide by selector
     HIDE_SELECTORS.forEach(function(sel) {
       document.querySelectorAll(sel).forEach(function(el) {
         el.style.setProperty('display', 'none', 'important');
       });
     });
-    // Hide dropdown menu items by text
     document.querySelectorAll('.ant-dropdown-menu-item, li[role="menuitem"]').forEach(function(li) {
       var text = li.innerText && li.innerText.trim();
       if (text && HIDE_MENU_TEXTS.some(function(t){ return text.indexOf(t) !== -1; })) {
         li.style.setProperty('display', 'none', 'important');
       }
+    });
+    // Remove href from chart title links — prevents right-click → "Open in new tab"
+    document.querySelectorAll('a[href^="/chart/"], a[href^="/explore/"], a[href^="/superset/dashboard/"]').forEach(function(a) {
+      a.removeAttribute('href');
+      a.style.cursor = 'default';
     });
   }
 
@@ -288,6 +288,8 @@ if (window.parent !== window) {
     'Share': 'Compartir',
     'Enter fullscreen': 'Pantalla completa',
     'Exit fullscreen': 'Salir de pantalla completa',
+    'View as table': 'Ver como tabla',
+    'View query': 'Ver consulta',
     'Refresh dashboard': 'Actualizar dashboard',
     'Enter fullscreen mode': 'Modo pantalla completa',
     'Force refresh': 'Forzar actualización',
@@ -344,6 +346,21 @@ if (window.parent !== window) {
     translateTree(document.body);
     observer.observe(document.body, { childList: true, subtree: true });
   });
+})();
+
+// Fullscreen diagnostics
+(function(){
+  function logFullscreen(e) {
+    var el = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement;
+    console.log('[TradeAudit] fullscreenchange — element:', el ? el.tagName + ' class="' + el.className + '"' : 'none (exited)');
+    if (el) {
+      var cs = window.getComputedStyle(el);
+      console.log('[TradeAudit] fullscreen bg:', cs.backgroundColor, '| color:', cs.color);
+    }
+  }
+  document.addEventListener('fullscreenchange', logFullscreen);
+  document.addEventListener('webkitfullscreenchange', logFullscreen);
+  document.addEventListener('mozfullscreenchange', logFullscreen);
 })();
 
 // Intercept non-critical API calls that fail for guest tokens
