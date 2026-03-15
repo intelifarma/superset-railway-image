@@ -238,7 +238,10 @@ if (window.parent !== window) {
     '[aria-label="Add components"]',
   ];
 
-  var HIDE_MENU_TEXTS = ['Share', 'Embed dashboard', 'Save as', 'Edit dashboard', 'Compartir', 'Editar dashboard'];
+  var HIDE_MENU_TEXTS = [
+    'Share', 'Embed dashboard', 'Save as', 'Edit dashboard', 'Edit chart',
+    'Compartir', 'Editar dashboard', 'Editar gráfico', 'Guardar como', 'Incrustar dashboard'
+  ];
 
   function hideElements() {
     HIDE_SELECTORS.forEach(function(sel) {
@@ -252,10 +255,14 @@ if (window.parent !== window) {
         li.style.setProperty('display', 'none', 'important');
       }
     });
-    // Remove href from chart title links — prevents right-click → "Open in new tab"
-    document.querySelectorAll('a[href^="/chart/"], a[href^="/explore/"], a[href^="/superset/dashboard/"]').forEach(function(a) {
-      a.removeAttribute('href');
-      a.style.cursor = 'default';
+    // Remove href from ALL internal Superset links — prevents right-click → "Open in new tab"
+    document.querySelectorAll('a[href]').forEach(function(a) {
+      var href = a.getAttribute('href') || '';
+      if (href.startsWith('/') || href.startsWith(window.location.origin)) {
+        a.removeAttribute('href');
+        a.style.cursor = 'default';
+        a.title = '';
+      }
     });
   }
 
