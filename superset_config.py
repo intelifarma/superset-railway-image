@@ -146,12 +146,14 @@ if (window.parent !== window) {
       if (depth <= 5) {
         console.log('[TradeAudit]   depth=' + depth, el.tagName, '| dt=' + dt, '| title=' + titleAttr.substring(0,60), '| cls=' + cls.substring(0,60));
       }
+      // Logs revealed: class is "editable-title superset-HASH" and container is "header-title"
       if (dt === 'editable-title' ||
+          cls.indexOf('editable-title') !== -1 ||
+          cls.indexOf('header-title') !== -1 ||
           titleAttr.toLowerCase().indexOf('click to edit') !== -1 ||
           cls.indexOf('chart-header__title') !== -1 ||
-          (el.tagName === 'H3' && el.closest && el.closest('[class*="chart-header"]')) ||
-          (el.tagName === 'A' && el.closest && el.closest('[class*="chart-header"]'))) {
-        console.log('[TradeAudit] BLOCKED chart title click at depth=' + depth, '| el:', el.tagName, dt || titleAttr.substring(0,40));
+          (el.tagName === 'H3' && el.closest && el.closest('[class*="chart-header"]'))) {
+        console.log('[TradeAudit] BLOCKED chart title click at depth=' + depth, '| el:', el.tagName, '| cls:', cls.substring(0,60));
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
@@ -211,8 +213,8 @@ if (window.parent !== window) {
   // Chart title: block click-to-explore (CSS is secondary; JS capture handler is primary)
   // Disabled menu items (e.g. "Cached X ago") and dividers are hidden outright
   var BLOCK_NAV_CSS = [
-    // Prevent chart title hover/click — broad selectors to cover all Superset versions
-    '.chart-header__title, .chart-header__title *, [data-test="editable-title"], a.title-panel { pointer-events: none !important; cursor: default !important; }',
+    // Logs revealed actual classes: "editable-title" on SPAN, "header-title" on container
+    '.header-title, .header-title *, .editable-title, [data-test="editable-title"], .chart-header__title, .chart-header__title *, a.title-panel { pointer-events: none !important; cursor: default !important; }',
     // Hide "Cached X ago" disabled info row and menu dividers
     '.ant-dropdown-menu-item-disabled, .ant-dropdown-menu-item-divider { display: none !important; }',
     // Also hide the freshness badge in chart toolbar
@@ -303,28 +305,34 @@ if (window.parent !== window) {
     });
 
     // Force inline pointer-events:none on chart title elements (beats any stylesheet override)
+    // Selectors based on actual observed classes from console logs
     document.querySelectorAll(
-      '[data-test="editable-title"], .chart-header__title, .chart-header__title *'
+      '.header-title, .header-title *, .editable-title, [data-test="editable-title"], .chart-header__title, .chart-header__title *'
     ).forEach(function(el) {
       if (el.style.pointerEvents !== 'none') {
         el.style.setProperty('pointer-events', 'none', 'important');
         el.style.cursor = 'default';
-        el.title = ''; // remove tooltip
+        if (el.title) el.title = ''; // remove "Click to edit" tooltip
       }
     });
 
-    // Hide menu items AND submenu parents (Compartir is a submenu, not a plain item)
+    // Hide menu items AND submenu parents
     document.querySelectorAll(
       '.ant-dropdown-menu-item, .ant-dropdown-menu-submenu, li[role="menuitem"]'
     ).forEach(function(li) {
       if (li.style.display === 'none') return; // already hidden — skip to avoid loop
       var titleEl = li.querySelector('.ant-dropdown-menu-submenu-title') || li;
-      var text = (titleEl.firstChild && titleEl.firstChild.nodeType === 3)
-        ? titleEl.firstChild.textContent.trim()
-        : (titleEl.innerText || '').split('\\n')[0].trim();
+      // Try multiple text extraction strategies
+      var titleContent = li.querySelector('.ant-dropdown-menu-title-content');
+      var text = titleContent
+        ? (titleContent.textContent || '').trim()
+        : ((titleEl.firstChild && titleEl.firstChild.nodeType === 3)
+          ? titleEl.firstChild.textContent.trim()
+          : (titleEl.innerText || '').split('\\n')[0].trim());
       if (!text) return;
+      console.log('[TradeAudit] menu item text:', JSON.stringify(text)); // log ALL items for debugging
       var shouldHide = HIDE_MENU_TEXTS.some(function(t){ return text.indexOf(t) !== -1; })
-        // Also hide "Cached …" / "Fetched …" freshness info rows regardless of language
+        // Hide "Cached …" / "Fetched …" freshness info rows regardless of language
         || /cached|fetched|updated|en cach|actualizado/i.test(text)
         || /hace (unos|un|[0-9]+)|ago/i.test(text);
       if (shouldHide) {
