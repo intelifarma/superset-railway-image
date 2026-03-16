@@ -594,7 +594,7 @@ def FLASK_APP_MUTATOR(app: Flask):
         path = flask_request.path
         # Block the HTML login page — redirect to the platform
         # Admin can still access via /login?key=SECRET
-        if path in ("/login/", "/login"):
+        if path in ("/login/", "/login") and flask_request.method == "GET":
             key = flask_request.args.get("key", "")
             if key != ADMIN_ACCESS_KEY:
                 return redirect(PLATFORM_URL, code=302)
