@@ -323,8 +323,15 @@ if (window.parent !== window) {
       bc.style.setProperty('right', '0', 'important');
       // width driven by left+right, clear any explicit width that was for fixed context
       bc.style.setProperty('width', 'auto', 'important');
-      // Remove Superset's border-top that creates the visible separator line
-      bc.style.setProperty('border-top', 'none', 'important');
+      // Remove Superset's borders on the ButtonsContainer and the filter panel itself
+      bc.style.setProperty('border', 'none', 'important');
+      // Also remove border/shadow from the filter panel (bc's parent = superset-1f1jw7q)
+      // which creates the visible line at the bottom of the panel
+      var filterPanel = bc.parentElement;
+      if (filterPanel) {
+        filterPanel.style.setProperty('border-bottom', 'none', 'important');
+        filterPanel.style.setProperty('box-shadow', 'none', 'important');
+      }
     });
 
     // Force inline pointer-events:none on chart title elements (beats any stylesheet override)
