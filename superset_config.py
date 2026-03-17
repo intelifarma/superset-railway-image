@@ -294,26 +294,34 @@ if (window.parent !== window) {
       });
     });
 
-    // Style filter bar Apply/Clear button container — class names are Emotion hashes (change per build)
-    var FILTER_BTN_TEXTS = ['Apply filters', 'Apply', 'Clear all', 'Limpiar todo', 'Aplicar'];
-    document.querySelectorAll('button, [role="button"]').forEach(function(btn) {
-      var text = (btn.textContent || '').trim();
-      if (FILTER_BTN_TEXTS.indexOf(text) !== -1) {
-        if (btn.closest && (btn.closest('[class*="filter-bar"]') || btn.closest('[data-test*="filter-bar"]'))) {
-          // Style the parent container so it looks integrated with the panel
-          var container = btn.parentElement;
-          if (container && !container.getAttribute('data-ta-styled')) {
-            container.setAttribute('data-ta-styled', '1');
-            container.style.cssText += ';border-top:1px solid rgba(255,255,255,0.1) !important;padding:12px 16px !important;margin:0 !important;background:inherit !important;flex-shrink:0 !important;';
-          }
-          // Style the buttons themselves
-          if (!btn.getAttribute('data-ta-styled')) {
-            btn.setAttribute('data-ta-styled', '1');
-            btn.style.cssText += ';width:100% !important;margin:0 0 8px 0 !important;border-radius:6px !important;';
-          }
-        }
-      }
+    // Fix filter bar action buttons layout — Emotion class names change per build, navigate by structure
+    var applyBtn = null;
+    document.querySelectorAll('button').forEach(function(btn) {
+      if ((btn.textContent || '').trim() === 'Apply filters') applyBtn = btn;
     });
+    if (applyBtn && !applyBtn.getAttribute('data-ta-fb-fixed')) {
+      var filterBar = applyBtn.closest('[class*="filter-bar"]');
+      if (filterBar) {
+        // Walk up from button to find the direct child of filterBar (the buttons section)
+        var el = applyBtn;
+        while (el && el.parentElement !== filterBar) { el = el.parentElement; }
+        var buttonsSection = el;
+        // Previous sibling is the scrollable filters list with the 108px bottom padding
+        var filtersList = buttonsSection ? buttonsSection.previousElementSibling : null;
+
+        if (buttonsSection) {
+          buttonsSection.style.setProperty('border-top', '1px solid rgba(255,255,255,0.12)', 'important');
+          buttonsSection.style.setProperty('padding', '12px 16px 16px', 'important');
+          buttonsSection.style.setProperty('flex-shrink', '0', 'important');
+          buttonsSection.style.setProperty('background', 'transparent', 'important');
+        }
+        if (filtersList) {
+          // Remove the large bottom padding Superset adds for the action buttons
+          filtersList.style.setProperty('padding-bottom', '0', 'important');
+        }
+        applyBtn.setAttribute('data-ta-fb-fixed', '1');
+      }
+    }
 
     // Force inline pointer-events:none on chart title elements (beats any stylesheet override)
     // Selectors based on actual observed classes from console logs
