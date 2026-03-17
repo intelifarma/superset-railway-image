@@ -296,9 +296,12 @@ if (window.parent !== window) {
     // In Superset, ButtonsContainer uses position:fixed — it overlays the filter list.
     // Our transparency CSS removes its gradient background, making it look disconnected.
     // Find it by walking up from the Apply button until we hit position:fixed ancestor.
+    // NOTE: check both "apply" (English) and "aplicar" (Spanish) — the translation
+    // observer may have already run and changed the button text before hideElements fires.
     document.querySelectorAll('.ant-btn-primary').forEach(function(btn) {
       if (btn.getAttribute('data-ta-bc-fixed')) return;
-      if ((btn.textContent || '').trim().toLowerCase().indexOf('apply') === -1) return;
+      var btnText = (btn.textContent || '').trim().toLowerCase();
+      if (btnText.indexOf('apply') === -1 && btnText.indexOf('aplicar') === -1) return;
       var el = btn;
       for (var i = 0; i < 10; i++) {
         if (!el.parentElement) break;
