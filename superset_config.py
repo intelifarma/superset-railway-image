@@ -206,9 +206,7 @@ if (window.parent !== window) {
     // Hide "Cached X ago" disabled info row and menu dividers
     '.ant-dropdown-menu-item-disabled, .ant-dropdown-menu-item-divider { display: none !important; }',
     // Also hide the freshness badge in chart toolbar
-    '[data-test="data-last-updated"], [class*="last-updated"], [class*="dataLastUpdated"], [class*="dataSourceInfo"] { display: none !important; }',
-    // Hide Apply/Clear buttons in filter bar — all filters use isInstant so buttons are useless
-    '[data-test="filter-bar__apply-button"], [data-test="filter-bar__clear-button"], [class*="apply-cancel"], [class*="ActionButtons"], .filter-bar__apply-cancel-buttons { display: none !important; }'
+    '[data-test="data-last-updated"], [class*="last-updated"], [class*="dataLastUpdated"], [class*="dataSourceInfo"] { display: none !important; }'
   ].join('\\n');
 
   var DARK_OVERRIDE_CSS = [
@@ -294,34 +292,6 @@ if (window.parent !== window) {
       });
     });
 
-    // Fix filter bar action buttons layout
-    // Find the buttons container by text content — it's the only small div containing both texts
-    if (!document.querySelector('[data-ta-fb-done]')) {
-      var divs = document.querySelectorAll('div');
-      for (var di = 0; di < divs.length; di++) {
-        var d = divs[di];
-        if (d.getAttribute('data-ta-fb-done')) continue;
-        var h = d.offsetHeight;
-        if (h < 50 || h > 200) continue;
-        var txt = d.textContent || '';
-        if (txt.indexOf('Apply filters') === -1 && txt.indexOf('Aplicar') === -1) continue;
-        if (txt.indexOf('Limpiar') === -1 && txt.indexOf('Clear') === -1) continue;
-        var prev = d.previousElementSibling;
-        if (!prev || prev.scrollHeight < 100) continue;
-        // Found: d = buttons container, prev = filter list with excess padding
-        d.setAttribute('data-ta-fb-done', '1');
-        d.style.setProperty('border-top', '1px solid rgba(128,128,128,0.25)', 'important');
-        d.style.setProperty('flex-shrink', '0', 'important');
-        // Fix buttons section width overflow (causes horizontal scrollbar)
-        d.style.setProperty('box-sizing', 'border-box', 'important');
-        d.style.setProperty('width', '100%', 'important');
-        d.style.setProperty('max-width', '100%', 'important');
-        // Hide the horizontal scrollbar on the filter bar root
-        var root = d.parentElement;
-        if (root) root.style.setProperty('overflow-x', 'hidden', 'important');
-        break;
-      }
-    }
 
     // Force inline pointer-events:none on chart title elements (beats any stylesheet override)
     // Selectors based on actual observed classes from console logs
