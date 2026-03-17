@@ -295,40 +295,26 @@ if (window.parent !== window) {
     });
 
     // Fix filter bar action buttons layout
-    // Use stable Ant Design class .ant-btn-primary (not Emotion hashes which change per build)
-    // Only run if not already fixed (check on the container, not the button)
+    // Find the buttons container by text content — it's the only small div containing both texts
     if (!document.querySelector('[data-ta-fb-done]')) {
-      var applyBtn = null;
-      document.querySelectorAll('.ant-btn-primary').forEach(function(b) {
-        var r = b.getBoundingClientRect();
-        if (r.left < 350 && r.width > 0) applyBtn = b; // must be in left sidebar
-      });
-      if (applyBtn) {
-        // Walk up to find the buttons container: ~115px tall, at left edge, contains the button
-        var el = applyBtn;
-        var buttonsSection = null;
-        for (var i = 0; i < 10; i++) {
-          if (!el.parentElement) break;
-          el = el.parentElement;
-          var r = el.getBoundingClientRect();
-          if (r.height > 90 && r.height < 150 && r.width > 200 && r.left < 10) {
-            buttonsSection = el;
-            break;
-          }
-        }
-        if (buttonsSection) {
-          buttonsSection.setAttribute('data-ta-fb-done', '1');
-          var theme = sessionStorage.getItem('_embedded_theme') || 'light';
-          var bg = theme === 'dark' ? '#1f1f1f' : '#f0f0f0';
-          buttonsSection.style.setProperty('border-top', '1px solid rgba(128,128,128,0.25)', 'important');
-          buttonsSection.style.setProperty('padding', '12px 16px 16px', 'important');
-          buttonsSection.style.setProperty('background', bg, 'important');
-          buttonsSection.style.setProperty('flex-shrink', '0', 'important');
-          var filtersList = buttonsSection.previousElementSibling;
-          if (filtersList) {
-            filtersList.style.setProperty('padding-bottom', '0', 'important');
-          }
-        }
+      var divs = document.querySelectorAll('div');
+      for (var di = 0; di < divs.length; di++) {
+        var d = divs[di];
+        if (d.getAttribute('data-ta-fb-done')) continue;
+        var h = d.offsetHeight;
+        if (h < 50 || h > 200) continue;
+        var txt = d.textContent || '';
+        if (txt.indexOf('Apply filters') === -1 && txt.indexOf('Aplicar') === -1) continue;
+        if (txt.indexOf('Limpiar') === -1 && txt.indexOf('Clear') === -1) continue;
+        var prev = d.previousElementSibling;
+        if (!prev || prev.scrollHeight < 100) continue;
+        // Found: d = buttons container, prev = filter list with excess padding
+        d.setAttribute('data-ta-fb-done', '1');
+        d.style.setProperty('border-top', '1px solid rgba(128,128,128,0.25)', 'important');
+        d.style.setProperty('padding', '12px 16px 16px', 'important');
+        d.style.setProperty('flex-shrink', '0', 'important');
+        prev.style.setProperty('padding-bottom', '0', 'important');
+        break;
       }
     }
 
