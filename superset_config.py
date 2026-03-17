@@ -292,6 +292,27 @@ if (window.parent !== window) {
       });
     });
 
+    // Fix filter bar ButtonsContainer background.
+    // In Superset, ButtonsContainer uses position:fixed — it overlays the filter list.
+    // Our transparency CSS removes its gradient background, making it look disconnected.
+    // Find it by walking up from the Apply button until we hit position:fixed ancestor.
+    document.querySelectorAll('.ant-btn-primary').forEach(function(btn) {
+      if (btn.getAttribute('data-ta-bc-fixed')) return;
+      if ((btn.textContent || '').trim().toLowerCase().indexOf('apply') === -1) return;
+      var el = btn;
+      for (var i = 0; i < 10; i++) {
+        if (!el.parentElement) break;
+        el = el.parentElement;
+        if (window.getComputedStyle(el).position === 'fixed') {
+          btn.setAttribute('data-ta-bc-fixed', '1');
+          var theme = sessionStorage.getItem('_embedded_theme') || 'light';
+          var bg = theme === 'dark' ? '#141414' : '#ffffff';
+          el.style.setProperty('background', bg, 'important');
+          el.style.setProperty('border-top', '1px solid rgba(128,128,128,0.2)', 'important');
+          break;
+        }
+      }
+    });
 
     // Force inline pointer-events:none on chart title elements (beats any stylesheet override)
     // Selectors based on actual observed classes from console logs
