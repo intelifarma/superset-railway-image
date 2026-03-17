@@ -292,17 +292,16 @@ if (window.parent !== window) {
       });
     });
 
-    // Fix filter bar layout: change ButtonsContainer from position:fixed to relative.
-    // Superset pins ButtonsContainer to the viewport bottom (position:fixed), which
-    // creates a large empty gap between the last filter and the buttons.
-    // We move it into the normal flex flow so it appears immediately below the filters.
-    // NOTE: check both "apply" (EN) and "aplicar" (ES) — translation may have run first.
+    // Fix filter bar ButtonsContainer background.
+    // Superset's ButtonsContainer uses position:fixed (sibling of the filter panel in DOM,
+    // visually overlaid at viewport bottom). Our transparency CSS removes its gradient.
+    // Restore a solid background so it looks visually connected to the filter bar.
+    // NOTE: check both "apply" (EN) and "aplicar" (ES) since translation may run first.
     document.querySelectorAll('.ant-btn-primary').forEach(function(btn) {
       if (btn.getAttribute('data-ta-positioned')) return;
       var btnText = (btn.textContent || '').trim().toLowerCase();
       if (btnText.indexOf('apply') === -1 && btnText.indexOf('aplicar') === -1) return;
 
-      // Find the ButtonsContainer (position:fixed ancestor within 10 levels)
       var el = btn, bc = null;
       for (var i = 0; i < 10; i++) {
         if (!el.parentElement) break;
@@ -313,24 +312,8 @@ if (window.parent !== window) {
       btn.setAttribute('data-ta-positioned', '1');
 
       var theme = sessionStorage.getItem('_embedded_theme') || 'light';
-      // Pull out of fixed positioning — now flows in normal flex column after filter list
-      bc.style.setProperty('position', 'relative', 'important');
-      bc.style.setProperty('width', '100%', 'important');
-      // Background matching the filter bar panel
       bc.style.setProperty('background', theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff', 'important');
       bc.style.setProperty('border-top', '1px solid rgba(128,128,128,0.2)', 'important');
-
-      // Fix sibling filter list: remove the padding-bottom that was reserved to prevent
-      // the fixed buttons from overlapping the last filter, and collapse flex growth
-      // so the list only takes its content height (buttons appear right after).
-      var p = bc.parentElement;
-      if (p) {
-        Array.prototype.slice.call(p.children).forEach(function(sib) {
-          if (sib === bc) return;
-          sib.style.setProperty('padding-bottom', '0', 'important');
-          sib.style.setProperty('flex', '0 0 auto', 'important');
-        });
-      }
     });
 
     // Force inline pointer-events:none on chart title elements (beats any stylesheet override)
