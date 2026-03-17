@@ -312,20 +312,13 @@ if (window.parent !== window) {
         d.setAttribute('data-ta-fb-done', '1');
         d.style.setProperty('border-top', '1px solid rgba(128,128,128,0.25)', 'important');
         d.style.setProperty('flex-shrink', '0', 'important');
-        // Fix the filter list: it uses flex:1 (fills all space regardless of content)
-        // Change to auto-height so buttons appear right below the last filter
-        prev.setAttribute('data-ta-fl', '1');
-        prev.style.setProperty('flex', '0 0 auto', 'important');
-        prev.style.setProperty('height', 'auto', 'important');
-        prev.style.setProperty('max-height', 'calc(100vh - 180px)', 'important');
-        prev.style.setProperty('overflow-y', 'auto', 'important');
-        prev.style.setProperty('padding-bottom', '8px', 'important');
-        if (!document.getElementById('ta-fl-style')) {
-          var s = document.createElement('style');
-          s.id = 'ta-fl-style';
-          s.textContent = '[data-ta-fl] { flex: 0 0 auto !important; height: auto !important; max-height: calc(100vh - 180px) !important; overflow-y: auto !important; padding-bottom: 8px !important; }';
-          document.head.appendChild(s);
-        }
+        // Fix buttons section width overflow (causes horizontal scrollbar)
+        d.style.setProperty('box-sizing', 'border-box', 'important');
+        d.style.setProperty('width', '100%', 'important');
+        d.style.setProperty('max-width', '100%', 'important');
+        // Hide the horizontal scrollbar on the filter bar root
+        var root = d.parentElement;
+        if (root) root.style.setProperty('overflow-x', 'hidden', 'important');
         break;
       }
     }
