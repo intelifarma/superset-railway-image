@@ -292,28 +292,44 @@ if (window.parent !== window) {
       });
     });
 
-    // Fix filter bar ButtonsContainer background.
-    // In Superset, ButtonsContainer uses position:fixed — it overlays the filter list.
-    // Our transparency CSS removes its gradient background, making it look disconnected.
-    // Find it by walking up from the Apply button until we hit position:fixed ancestor.
-    // NOTE: check both "apply" (English) and "aplicar" (Spanish) — the translation
-    // observer may have already run and changed the button text before hideElements fires.
+    // Fix filter bar layout: change ButtonsContainer from position:fixed to relative.
+    // Superset pins ButtonsContainer to the viewport bottom (position:fixed), which
+    // creates a large empty gap between the last filter and the buttons.
+    // We move it into the normal flex flow so it appears immediately below the filters.
+    // NOTE: check both "apply" (EN) and "aplicar" (ES) — translation may have run first.
     document.querySelectorAll('.ant-btn-primary').forEach(function(btn) {
-      if (btn.getAttribute('data-ta-bc-fixed')) return;
+      if (btn.getAttribute('data-ta-positioned')) return;
       var btnText = (btn.textContent || '').trim().toLowerCase();
       if (btnText.indexOf('apply') === -1 && btnText.indexOf('aplicar') === -1) return;
-      var el = btn;
+
+      // Find the ButtonsContainer (position:fixed ancestor within 10 levels)
+      var el = btn, bc = null;
       for (var i = 0; i < 10; i++) {
         if (!el.parentElement) break;
         el = el.parentElement;
-        if (window.getComputedStyle(el).position === 'fixed') {
-          btn.setAttribute('data-ta-bc-fixed', '1');
-          var theme = sessionStorage.getItem('_embedded_theme') || 'light';
-          var bg = theme === 'dark' ? '#141414' : '#ffffff';
-          el.style.setProperty('background', bg, 'important');
-          el.style.setProperty('border-top', '1px solid rgba(128,128,128,0.2)', 'important');
-          break;
-        }
+        if (window.getComputedStyle(el).position === 'fixed') { bc = el; break; }
+      }
+      if (!bc) return;
+      btn.setAttribute('data-ta-positioned', '1');
+
+      var theme = sessionStorage.getItem('_embedded_theme') || 'light';
+      // Pull out of fixed positioning — now flows in normal flex column after filter list
+      bc.style.setProperty('position', 'relative', 'important');
+      bc.style.setProperty('width', '100%', 'important');
+      // Background matching the filter bar panel
+      bc.style.setProperty('background', theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff', 'important');
+      bc.style.setProperty('border-top', '1px solid rgba(128,128,128,0.2)', 'important');
+
+      // Fix sibling filter list: remove the padding-bottom that was reserved to prevent
+      // the fixed buttons from overlapping the last filter, and collapse flex growth
+      // so the list only takes its content height (buttons appear right after).
+      var p = bc.parentElement;
+      if (p) {
+        Array.prototype.slice.call(p.children).forEach(function(sib) {
+          if (sib === bc) return;
+          sib.style.setProperty('padding-bottom', '0', 'important');
+          sib.style.setProperty('flex', '0 0 auto', 'important');
+        });
       }
     });
 
