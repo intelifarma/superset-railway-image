@@ -294,32 +294,44 @@ if (window.parent !== window) {
       });
     });
 
-    // Fix filter bar action buttons layout — Emotion class names change per build, navigate by structure
+    // Fix filter bar action buttons layout
+    // Emotion hashes change per build — navigate purely by DOM structure
     var applyBtn = null;
-    document.querySelectorAll('button').forEach(function(btn) {
-      if ((btn.textContent || '').trim() === 'Apply filters') applyBtn = btn;
+    document.querySelectorAll('button').forEach(function(b) {
+      if ((b.textContent || '').trim() === 'Apply filters') applyBtn = b;
     });
     if (applyBtn && !applyBtn.getAttribute('data-ta-fb-fixed')) {
-      var filterBar = applyBtn.closest('[class*="filter-bar"]');
-      if (filterBar) {
-        // Walk up from button to find the direct child of filterBar (the buttons section)
-        var el = applyBtn;
-        while (el && el.parentElement !== filterBar) { el = el.parentElement; }
-        var buttonsSection = el;
-        // Previous sibling is the scrollable filters list with the 108px bottom padding
-        var filtersList = buttonsSection ? buttonsSection.previousElementSibling : null;
-
-        if (buttonsSection) {
-          buttonsSection.style.setProperty('border-top', '1px solid rgba(255,255,255,0.12)', 'important');
-          buttonsSection.style.setProperty('padding', '12px 16px 16px', 'important');
-          buttonsSection.style.setProperty('flex-shrink', '0', 'important');
-          buttonsSection.style.setProperty('background', 'transparent', 'important');
+      applyBtn.setAttribute('data-ta-fb-fixed', '1');
+      // Walk UP until we find the element whose PARENT has multiple children
+      // (that's where buttons-section and filters-list are siblings)
+      var el = applyBtn;
+      var buttonsSection = null;
+      var filtersList = null;
+      for (var i = 0; i < 10; i++) {
+        if (!el.parentElement) break;
+        el = el.parentElement;
+        var siblings = el.parentElement ? Array.from(el.parentElement.children) : [];
+        if (siblings.length >= 2) {
+          buttonsSection = el;
+          for (var j = 0; j < siblings.length; j++) {
+            if (siblings[j] !== el && siblings[j].scrollHeight > 200) {
+              filtersList = siblings[j];
+              break;
+            }
+          }
+          if (filtersList) break;
         }
-        if (filtersList) {
-          // Remove the large bottom padding Superset adds for the action buttons
-          filtersList.style.setProperty('padding-bottom', '0', 'important');
-        }
-        applyBtn.setAttribute('data-ta-fb-fixed', '1');
+      }
+      var theme = sessionStorage.getItem('_embedded_theme') || 'light';
+      var bg = theme === 'dark' ? '#1f1f1f' : '#ffffff';
+      if (buttonsSection) {
+        buttonsSection.style.setProperty('border-top', '1px solid rgba(128,128,128,0.25)', 'important');
+        buttonsSection.style.setProperty('padding', '12px 16px 16px', 'important');
+        buttonsSection.style.setProperty('background', bg, 'important');
+        buttonsSection.style.setProperty('flex-shrink', '0', 'important');
+      }
+      if (filtersList) {
+        filtersList.style.setProperty('padding-bottom', '0', 'important');
       }
     }
 
