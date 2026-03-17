@@ -295,43 +295,40 @@ if (window.parent !== window) {
     });
 
     // Fix filter bar action buttons layout
-    // Emotion hashes change per build — navigate purely by DOM structure
-    var applyBtn = null;
-    document.querySelectorAll('button').forEach(function(b) {
-      if ((b.textContent || '').trim() === 'Apply filters') applyBtn = b;
-    });
-    if (applyBtn && !applyBtn.getAttribute('data-ta-fb-fixed')) {
-      applyBtn.setAttribute('data-ta-fb-fixed', '1');
-      // Walk UP until we find the element whose PARENT has multiple children
-      // (that's where buttons-section and filters-list are siblings)
-      var el = applyBtn;
-      var buttonsSection = null;
-      var filtersList = null;
-      for (var i = 0; i < 10; i++) {
-        if (!el.parentElement) break;
-        el = el.parentElement;
-        var siblings = el.parentElement ? Array.from(el.parentElement.children) : [];
-        if (siblings.length >= 2) {
-          buttonsSection = el;
-          for (var j = 0; j < siblings.length; j++) {
-            if (siblings[j] !== el && siblings[j].scrollHeight > 200) {
-              filtersList = siblings[j];
-              break;
-            }
+    // Use stable Ant Design class .ant-btn-primary (not Emotion hashes which change per build)
+    // Only run if not already fixed (check on the container, not the button)
+    if (!document.querySelector('[data-ta-fb-done]')) {
+      var applyBtn = null;
+      document.querySelectorAll('.ant-btn-primary').forEach(function(b) {
+        var r = b.getBoundingClientRect();
+        if (r.left < 350 && r.width > 0) applyBtn = b; // must be in left sidebar
+      });
+      if (applyBtn) {
+        // Walk up to find the buttons container: ~115px tall, at left edge, contains the button
+        var el = applyBtn;
+        var buttonsSection = null;
+        for (var i = 0; i < 10; i++) {
+          if (!el.parentElement) break;
+          el = el.parentElement;
+          var r = el.getBoundingClientRect();
+          if (r.height > 90 && r.height < 150 && r.width > 200 && r.left < 10) {
+            buttonsSection = el;
+            break;
           }
-          if (filtersList) break;
         }
-      }
-      var theme = sessionStorage.getItem('_embedded_theme') || 'light';
-      var bg = theme === 'dark' ? '#1f1f1f' : '#ffffff';
-      if (buttonsSection) {
-        buttonsSection.style.setProperty('border-top', '1px solid rgba(128,128,128,0.25)', 'important');
-        buttonsSection.style.setProperty('padding', '12px 16px 16px', 'important');
-        buttonsSection.style.setProperty('background', bg, 'important');
-        buttonsSection.style.setProperty('flex-shrink', '0', 'important');
-      }
-      if (filtersList) {
-        filtersList.style.setProperty('padding-bottom', '0', 'important');
+        if (buttonsSection) {
+          buttonsSection.setAttribute('data-ta-fb-done', '1');
+          var theme = sessionStorage.getItem('_embedded_theme') || 'light';
+          var bg = theme === 'dark' ? '#1f1f1f' : '#f0f0f0';
+          buttonsSection.style.setProperty('border-top', '1px solid rgba(128,128,128,0.25)', 'important');
+          buttonsSection.style.setProperty('padding', '12px 16px 16px', 'important');
+          buttonsSection.style.setProperty('background', bg, 'important');
+          buttonsSection.style.setProperty('flex-shrink', '0', 'important');
+          var filtersList = buttonsSection.previousElementSibling;
+          if (filtersList) {
+            filtersList.style.setProperty('padding-bottom', '0', 'important');
+          }
+        }
       }
     }
 
