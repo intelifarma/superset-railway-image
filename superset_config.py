@@ -292,29 +292,41 @@ if (window.parent !== window) {
       });
     });
 
-    // Fix filter bar ButtonsContainer background.
-    // Superset's ButtonsContainer uses position:fixed (sibling of the filter panel in DOM,
-    // visually overlaid at viewport bottom). Our transparency CSS removes its gradient.
-    // Restore a solid background so it looks visually connected to the filter bar.
-    // NOTE: check both "apply" (EN) and "aplicar" (ES) since translation may run first.
-    document.querySelectorAll('.ant-btn-primary').forEach(function(btn) {
-      if (btn.getAttribute('data-ta-positioned')) return;
-      var btnText = (btn.textContent || '').trim().toLowerCase();
-      if (btnText.indexOf('apply') === -1 && btnText.indexOf('aplicar') === -1) return;
+    // DIAGNOSTIC: dump filter bar DOM structure to console so we can fix it correctly.
+    // Open browser DevTools (F12) → Console → look for "[TA-DIAG]" lines.
+    (function() {
+      var applyBtn = null;
+      document.querySelectorAll('.ant-btn-primary, .ant-btn-default').forEach(function(b) {
+        var t = (b.textContent || '').trim().toLowerCase();
+        if (t.indexOf('apply') !== -1 || t.indexOf('aplicar') !== -1 || t.indexOf('limpiar') !== -1 || t.indexOf('clear') !== -1) {
+          if (!applyBtn) applyBtn = b;
+        }
+      });
+      if (!applyBtn || applyBtn.getAttribute('data-ta-diag')) return;
+      applyBtn.setAttribute('data-ta-diag', '1');
 
-      var el = btn, bc = null;
-      for (var i = 0; i < 10; i++) {
-        if (!el.parentElement) break;
+      console.log('[TA-DIAG] === Filter bar DOM structure ===');
+      var el = applyBtn;
+      var depth = 0;
+      while (el && depth < 20) {
+        var cs = window.getComputedStyle(el);
+        var r = el.getBoundingClientRect();
+        console.log('[TA-DIAG] depth=' + depth,
+          el.tagName,
+          'class="' + (typeof el.className === 'string' ? el.className.substring(0, 80) : '') + '"',
+          'pos=' + cs.position,
+          'display=' + cs.display,
+          'flex=' + cs.flex,
+          'overflow=' + cs.overflow + '/' + cs.overflowY,
+          'paddingBottom=' + cs.paddingBottom,
+          'rect={top:' + Math.round(r.top) + ',left:' + Math.round(r.left) + ',w:' + Math.round(r.width) + ',h:' + Math.round(r.height) + '}',
+          'bg=' + cs.background.substring(0, 60)
+        );
         el = el.parentElement;
-        if (window.getComputedStyle(el).position === 'fixed') { bc = el; break; }
+        depth++;
       }
-      if (!bc) return;
-      btn.setAttribute('data-ta-positioned', '1');
-
-      var theme = sessionStorage.getItem('_embedded_theme') || 'light';
-      bc.style.setProperty('background', theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff', 'important');
-      bc.style.setProperty('border-top', '1px solid rgba(128,128,128,0.2)', 'important');
-    });
+      console.log('[TA-DIAG] === end ===');
+    })();
 
     // Force inline pointer-events:none on chart title elements (beats any stylesheet override)
     // Selectors based on actual observed classes from console logs
