@@ -206,7 +206,9 @@ if (window.parent !== window) {
     // Hide "Cached X ago" disabled info row and menu dividers
     '.ant-dropdown-menu-item-disabled, .ant-dropdown-menu-item-divider { display: none !important; }',
     // Also hide the freshness badge in chart toolbar
-    '[data-test="data-last-updated"], [class*="last-updated"], [class*="dataLastUpdated"], [class*="dataSourceInfo"] { display: none !important; }'
+    '[data-test="data-last-updated"], [class*="last-updated"], [class*="dataLastUpdated"], [class*="dataSourceInfo"] { display: none !important; }',
+    // Hide Apply/Clear buttons in filter bar — all filters use isInstant so buttons are useless
+    '[data-test="filter-bar__apply-button"], [data-test="filter-bar__clear-button"], [class*="apply-cancel"], [class*="ActionButtons"], .filter-bar__apply-cancel-buttons { display: none !important; }'
   ].join('\\n');
 
   var DARK_OVERRIDE_CSS = [
