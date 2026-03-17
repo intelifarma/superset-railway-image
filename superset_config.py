@@ -292,41 +292,38 @@ if (window.parent !== window) {
       });
     });
 
-    // DIAGNOSTIC: dump filter bar DOM structure to console so we can fix it correctly.
-    // Open browser DevTools (F12) → Console → look for "[TA-DIAG]" lines.
-    (function() {
-      var applyBtn = null;
-      document.querySelectorAll('.ant-btn-primary, .ant-btn-default').forEach(function(b) {
-        var t = (b.textContent || '').trim().toLowerCase();
-        if (t.indexOf('apply') !== -1 || t.indexOf('aplicar') !== -1 || t.indexOf('limpiar') !== -1 || t.indexOf('clear') !== -1) {
-          if (!applyBtn) applyBtn = b;
-        }
-      });
-      if (!applyBtn || applyBtn.getAttribute('data-ta-diag')) return;
-      applyBtn.setAttribute('data-ta-diag', '1');
+    // Fix filter bar ButtonsContainer positioning.
+    // DOM confirmed via console log:
+    //   depth=0: BUTTON (Apply), pos=relative
+    //   depth=1: div.superset-9fofk4, pos=FIXED  ← ButtonsContainer
+    //   depth=2: div.superset-1f1jw7q, pos=absolute ← filter panel (the containing block)
+    // Problem: position:fixed anchors buttons to the viewport. The gradient's transparent
+    // top shows the viewport content behind it (visual disconnect).
+    // Fix: change to position:absolute so buttons anchor to the filter panel (depth=2).
+    // The gradient's transparent top then shows the panel's own background → seamless.
+    // NOTE: check both "apply" (EN) and "aplicar" (ES) since translation may run first.
+    document.querySelectorAll('.ant-btn-primary').forEach(function(btn) {
+      if (btn.getAttribute('data-ta-positioned')) return;
+      var btnText = (btn.textContent || '').trim().toLowerCase();
+      if (btnText.indexOf('apply') === -1 && btnText.indexOf('aplicar') === -1) return;
 
-      console.log('[TA-DIAG] === Filter bar DOM structure ===');
-      var el = applyBtn;
-      var depth = 0;
-      while (el && depth < 20) {
-        var cs = window.getComputedStyle(el);
-        var r = el.getBoundingClientRect();
-        console.log('[TA-DIAG] depth=' + depth,
-          el.tagName,
-          'class="' + (typeof el.className === 'string' ? el.className.substring(0, 80) : '') + '"',
-          'pos=' + cs.position,
-          'display=' + cs.display,
-          'flex=' + cs.flex,
-          'overflow=' + cs.overflow + '/' + cs.overflowY,
-          'paddingBottom=' + cs.paddingBottom,
-          'rect={top:' + Math.round(r.top) + ',left:' + Math.round(r.left) + ',w:' + Math.round(r.width) + ',h:' + Math.round(r.height) + '}',
-          'bg=' + cs.background.substring(0, 60)
-        );
+      var el = btn, bc = null;
+      for (var i = 0; i < 10; i++) {
+        if (!el.parentElement) break;
         el = el.parentElement;
-        depth++;
+        if (window.getComputedStyle(el).position === 'fixed') { bc = el; break; }
       }
-      console.log('[TA-DIAG] === end ===');
-    })();
+      if (!bc) return;
+      btn.setAttribute('data-ta-positioned', '1');
+
+      // Anchor to filter panel (position:absolute parent) instead of viewport (fixed)
+      bc.style.setProperty('position', 'absolute', 'important');
+      bc.style.setProperty('bottom', '0', 'important');
+      bc.style.setProperty('left', '0', 'important');
+      bc.style.setProperty('right', '0', 'important');
+      // width driven by left+right, clear any explicit width that was for fixed context
+      bc.style.setProperty('width', 'auto', 'important');
+    });
 
     // Force inline pointer-events:none on chart title elements (beats any stylesheet override)
     // Selectors based on actual observed classes from console logs
