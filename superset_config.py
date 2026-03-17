@@ -294,14 +294,23 @@ if (window.parent !== window) {
       });
     });
 
-    // Hide filter bar Apply/Clear buttons by text — class names are Emotion hashes (change per build)
+    // Style filter bar Apply/Clear button container — class names are Emotion hashes (change per build)
     var FILTER_BTN_TEXTS = ['Apply filters', 'Apply', 'Clear all', 'Limpiar todo', 'Aplicar'];
     document.querySelectorAll('button, [role="button"]').forEach(function(btn) {
       var text = (btn.textContent || '').trim();
       if (FILTER_BTN_TEXTS.indexOf(text) !== -1) {
-        // Only hide if inside the filter bar, not inside a dropdown
         if (btn.closest && (btn.closest('[class*="filter-bar"]') || btn.closest('[data-test*="filter-bar"]'))) {
-          btn.style.setProperty('display', 'none', 'important');
+          // Style the parent container so it looks integrated with the panel
+          var container = btn.parentElement;
+          if (container && !container.getAttribute('data-ta-styled')) {
+            container.setAttribute('data-ta-styled', '1');
+            container.style.cssText += ';border-top:1px solid rgba(255,255,255,0.1) !important;padding:12px 16px !important;margin:0 !important;background:inherit !important;flex-shrink:0 !important;';
+          }
+          // Style the buttons themselves
+          if (!btn.getAttribute('data-ta-styled')) {
+            btn.setAttribute('data-ta-styled', '1');
+            btn.style.cssText += ';width:100% !important;margin:0 0 8px 0 !important;border-radius:6px !important;';
+          }
         }
       }
     });
