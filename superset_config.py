@@ -311,9 +311,16 @@ if (window.parent !== window) {
         // Found: d = buttons container, prev = filter list with excess padding
         d.setAttribute('data-ta-fb-done', '1');
         d.style.setProperty('border-top', '1px solid rgba(128,128,128,0.25)', 'important');
-        d.style.setProperty('padding', '12px 16px 16px', 'important');
         d.style.setProperty('flex-shrink', '0', 'important');
-        prev.style.setProperty('padding-bottom', '0', 'important');
+        // Mark the filter list and inject a persistent CSS rule
+        // CSS !important beats React's plain inline style (no !important)
+        prev.setAttribute('data-ta-fl', '1');
+        if (!document.getElementById('ta-fl-style')) {
+          var s = document.createElement('style');
+          s.id = 'ta-fl-style';
+          s.textContent = '[data-ta-fl] { padding-bottom: 0 !important; }';
+          document.head.appendChild(s);
+        }
         break;
       }
     }
