@@ -323,6 +323,8 @@ if (window.parent !== window) {
       bc.style.setProperty('right', '0', 'important');
       // width driven by left+right, clear any explicit width that was for fixed context
       bc.style.setProperty('width', 'auto', 'important');
+      // Remove Superset's border-top that creates the visible separator line
+      bc.style.setProperty('border-top', 'none', 'important');
     });
 
     // Force inline pointer-events:none on chart title elements (beats any stylesheet override)
