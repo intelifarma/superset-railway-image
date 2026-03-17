@@ -294,6 +294,18 @@ if (window.parent !== window) {
       });
     });
 
+    // Hide filter bar Apply/Clear buttons by text — class names are Emotion hashes (change per build)
+    var FILTER_BTN_TEXTS = ['Apply filters', 'Apply', 'Clear all', 'Limpiar todo', 'Aplicar'];
+    document.querySelectorAll('button, [role="button"]').forEach(function(btn) {
+      var text = (btn.textContent || '').trim();
+      if (FILTER_BTN_TEXTS.indexOf(text) !== -1) {
+        // Only hide if inside the filter bar, not inside a dropdown
+        if (btn.closest && (btn.closest('[class*="filter-bar"]') || btn.closest('[data-test*="filter-bar"]'))) {
+          btn.style.setProperty('display', 'none', 'important');
+        }
+      }
+    });
+
     // Force inline pointer-events:none on chart title elements (beats any stylesheet override)
     // Selectors based on actual observed classes from console logs
     document.querySelectorAll(
