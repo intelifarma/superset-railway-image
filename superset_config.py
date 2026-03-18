@@ -485,6 +485,10 @@ if (window.parent !== window) {
       if (TRANSLATIONS[text]) {
         node.textContent = node.textContent.replace(text, TRANSLATIONS[text]);
       }
+      // Replace Prophet statistical notation with readable Spanish label
+      if (node.textContent.indexOf('\u0177') !== -1) {
+        node.textContent = node.textContent.replace(/\u0177\s*=/g, 'Proyecci\u00f3n:');
+      }
     }
   }
 
