@@ -542,8 +542,12 @@ if (window.parent !== window) {
   var _dayRe = /Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday/;
   var _yhatRe = /\u0177\s*=/g;
 
+  // DIAGNOSTIC: log which DOM path carries the tooltip date
+  var _dbgRe = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+20\d\d/;
+
   function _translateHtml(v) {
     if (typeof v !== 'string') return v;
+    if (_dbgRe.test(v)) console.log('[TA] innerHTML/IAH date:', v.substring(0, 120));
     if (_dayRe.test(v)) {
       for (var i = 0; i < _days.length; i++) v = v.replace(_days[i][0], _days[i][1]);
     }
@@ -566,30 +570,34 @@ if (window.parent !== window) {
     return _origIAH.call(this, pos, _translateHtml(v));
   };
 
-  // Intercept CharacterData.prototype.data — the lowest-level setter for text node content.
-  // node.nodeValue / node.textContent / node.data on text nodes all route through here.
-  // This catches the ECharts tooltip date title regardless of which property ECharts uses.
+  // Intercept CharacterData.prototype.data (text node .data / .nodeValue)
   var _origData = Object.getOwnPropertyDescriptor(CharacterData.prototype, 'data');
   if (_origData && _origData.set) {
     Object.defineProperty(CharacterData.prototype, 'data', {
       get: _origData.get,
       set: function(v) {
-        if (typeof v === 'string' && _dayRe.test(v)) {
-          for (var i = 0; i < _days.length; i++) v = v.replace(_days[i][0], _days[i][1]);
+        if (typeof v === 'string') {
+          if (_dbgRe.test(v)) console.log('[TA] CharacterData.data date:', v);
+          if (_dayRe.test(v)) {
+            for (var i = 0; i < _days.length; i++) v = v.replace(_days[i][0], _days[i][1]);
+          }
         }
         _origData.set.call(this, v);
       }
     });
   }
 
-  // Also intercept Node.prototype.textContent (element-level, e.g. element.textContent = '...')
+  // Intercept Node.prototype.textContent (element-level)
   var _origTC = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
   if (_origTC && _origTC.set) {
     Object.defineProperty(Node.prototype, 'textContent', {
       get: _origTC.get,
       set: function(v) {
-        if (typeof v === 'string' && _dayRe.test(v)) {
-          for (var i = 0; i < _days.length; i++) v = v.replace(_days[i][0], _days[i][1]);
+        if (typeof v === 'string') {
+          if (_dbgRe.test(v)) console.log('[TA] Node.textContent date:', v);
+          if (_dayRe.test(v)) {
+            for (var i = 0; i < _days.length; i++) v = v.replace(_days[i][0], _days[i][1]);
+          }
         }
         _origTC.set.call(this, v);
       }
