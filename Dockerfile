@@ -33,6 +33,9 @@ COPY superset_config.py /app/docker/superset_config.py
 RUN chmod +x ./startup.sh
 RUN chmod +x /app/docker/docker-bootstrap.sh
 
+# Install Prophet for Superset native forecasting
+RUN pip install prophet --no-cache-dir
+
 # Compile ALL translations that ship with the image (includes Spanish)
 # Use -f to force compilation even if .po has minor formatting issues
 RUN find /app/superset/translations -name "messages.po" -exec sh -c \
