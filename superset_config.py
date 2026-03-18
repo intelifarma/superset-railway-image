@@ -523,40 +523,28 @@ if (window.parent !== window) {
     });
   });
 
-  // For ECharts tooltips: poll only the tooltip div (lightweight, not whole-doc characterData)
-  var _tooltipObserver = null;
-  function watchEchartsTooltip(tooltipEl) {
-    if (_tooltipObserver) return;
-    _tooltipObserver = new MutationObserver(function() {
-      translateTree(tooltipEl);
-    });
-    _tooltipObserver.observe(tooltipEl, { childList: true, subtree: true, characterData: true });
-  }
-
-  // Detect when ECharts tooltip is added to DOM, then attach targeted observer
-  var _tooltipWatcher = new MutationObserver(function(mutations) {
-    mutations.forEach(function(mutation) {
-      mutation.addedNodes.forEach(function(node) {
-        if (node.nodeType !== Node.ELEMENT_NODE) return;
-        var style = node.getAttribute && node.getAttribute('style') || '';
-        // ECharts tooltip: position absolute/fixed, z-index high, small width
-        if ((node.tagName === 'DIV') && style.indexOf('z-index') !== -1 &&
-            style.indexOf('position') !== -1 && !node.id) {
-          watchEchartsTooltip(node);
-        }
-        // Also search inside added subtree
-        node.querySelectorAll && node.querySelectorAll('div[style*="z-index"]').forEach(function(el) {
-          if (!el.id) watchEchartsTooltip(el);
-        });
-      });
-    });
-  });
-
   document.addEventListener('DOMContentLoaded', function() {
     translateTree(document.body);
     observer.observe(document.body, { childList: true, subtree: true });
-    _tooltipWatcher.observe(document.body, { childList: true, subtree: true });
   });
+
+  // ECharts tooltips update their innerHTML repeatedly — MutationObserver misses most updates.
+  // Simple poll every 200ms: find any visible tooltip and translate it.
+  var _lastTooltipText = '';
+  setInterval(function() {
+    // ECharts tooltip: absolutely positioned div without an id, visible on screen
+    var candidates = document.querySelectorAll('div[style*="position: absolute"][style*="z-index"]:not([id])');
+    for (var i = 0; i < candidates.length; i++) {
+      var el = candidates[i];
+      var txt = el.textContent || '';
+      if (!txt || el.style.display === 'none' || el.style.visibility === 'hidden') continue;
+      if (!/Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday/.test(txt)) continue;
+      if (txt === _lastTooltipText) continue; // already translated this content
+      _lastTooltipText = txt;
+      translateTree(el);
+      break;
+    }
+  }, 200);
 })();
 
 // Fullscreen background fix.
