@@ -528,22 +528,8 @@ if (window.parent !== window) {
     observer.observe(document.body, { childList: true, subtree: true });
   });
 
-  // DIAGNOSTIC: log tooltip structure on mousemove
-  document.addEventListener('mousemove', function() {
-    var all = document.querySelectorAll('*');
-    for (var i = 0; i < all.length; i++) {
-      var el = all[i];
-      var txt = el.textContent || '';
-      if (/Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday/.test(txt) && el.children.length < 5) {
-        console.log('TOOLTIP FOUND:', el.tagName, el.className, el.getAttribute('style'), '|', txt.substring(0, 80));
-        console.log('OUTER HTML:', el.outerHTML.substring(0, 300));
-        break;
-      }
-    }
-  });
-
-  // Intercept innerHTML setter to translate weekday names at the source.
-  // ECharts sets tooltip content via innerHTML — this catches it regardless of DOM structure.
+  // Intercept innerHTML and insertAdjacentHTML to translate weekday names at the source.
+  // ECharts sets tooltip content via one of these — this catches it regardless of DOM structure.
   var _days = [
     [/\bMonday\b/g,    'Lunes'],
     [/\bTuesday\b/g,   'Martes'],
@@ -555,21 +541,44 @@ if (window.parent !== window) {
   ];
   var _dayRe = /Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday/;
   var _yhatRe = /\u0177\s*=/g;
+
+  function _translateHtml(v) {
+    if (typeof v !== 'string') return v;
+    if (_dayRe.test(v)) {
+      for (var i = 0; i < _days.length; i++) v = v.replace(_days[i][0], _days[i][1]);
+    }
+    if (v.indexOf('\u0177') !== -1) {
+      v = v.replace(_yhatRe, 'Proyecci\u00f3n:');
+    }
+    return v;
+  }
+
+  // Intercept innerHTML setter
   var _origIH = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
   Object.defineProperty(Element.prototype, 'innerHTML', {
     get: _origIH.get,
-    set: function(v) {
-      if (typeof v === 'string') {
-        if (_dayRe.test(v)) {
+    set: function(v) { _origIH.set.call(this, _translateHtml(v)); }
+  });
+
+  // Intercept insertAdjacentHTML (ECharts uses this in some versions)
+  var _origIAH = Element.prototype.insertAdjacentHTML;
+  Element.prototype.insertAdjacentHTML = function(pos, v) {
+    return _origIAH.call(this, pos, _translateHtml(v));
+  };
+
+  // Intercept textContent setter (catches plain-text tooltip cells)
+  var _origTC = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+  if (_origTC && _origTC.set) {
+    Object.defineProperty(Node.prototype, 'textContent', {
+      get: _origTC.get,
+      set: function(v) {
+        if (typeof v === 'string' && _dayRe.test(v)) {
           for (var i = 0; i < _days.length; i++) v = v.replace(_days[i][0], _days[i][1]);
         }
-        if (v.indexOf('\u0177') !== -1) {
-          v = v.replace(_yhatRe, 'Proyecci\u00f3n:');
-        }
+        _origTC.set.call(this, v);
       }
-      _origIH.set.call(this, v);
-    }
-  });
+    });
+  }
 })();
 
 // Fullscreen background fix.
