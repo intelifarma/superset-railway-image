@@ -542,12 +542,8 @@ if (window.parent !== window) {
   var _dayRe = /Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday/;
   var _yhatRe = /\u0177\s*=/g;
 
-  // DIAGNOSTIC: log which DOM path carries the tooltip date
-  var _dbgRe = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+20\d\d/;
-
   function _translateHtml(v) {
     if (typeof v !== 'string') return v;
-    if (_dbgRe.test(v)) console.log('[TA] innerHTML/IAH date:', v.substring(0, 120));
     if (_dayRe.test(v)) {
       for (var i = 0; i < _days.length; i++) v = v.replace(_days[i][0], _days[i][1]);
     }
@@ -557,52 +553,35 @@ if (window.parent !== window) {
     return v;
   }
 
-  // Intercept innerHTML setter
+  // Intercept innerHTML setter (handles ŷ → Proyección and day names in HTML strings)
   var _origIH = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
   Object.defineProperty(Element.prototype, 'innerHTML', {
     get: _origIH.get,
     set: function(v) { _origIH.set.call(this, _translateHtml(v)); }
   });
 
-  // Intercept insertAdjacentHTML (ECharts uses this in some versions)
+  // Intercept insertAdjacentHTML
   var _origIAH = Element.prototype.insertAdjacentHTML;
   Element.prototype.insertAdjacentHTML = function(pos, v) {
     return _origIAH.call(this, pos, _translateHtml(v));
   };
 
-  // Intercept CharacterData.prototype.data (text node .data / .nodeValue)
-  var _origData = Object.getOwnPropertyDescriptor(CharacterData.prototype, 'data');
-  if (_origData && _origData.set) {
-    Object.defineProperty(CharacterData.prototype, 'data', {
-      get: _origData.get,
-      set: function(v) {
-        if (typeof v === 'string') {
-          if (_dbgRe.test(v)) console.log('[TA] CharacterData.data date:', v);
-          if (_dayRe.test(v)) {
-            for (var i = 0; i < _days.length; i++) v = v.replace(_days[i][0], _days[i][1]);
-          }
+  // Scan all visible text nodes every 80ms and replace English day names in-place.
+  // This catches ECharts tooltip titles regardless of which DOM API they use.
+  setInterval(function() {
+    if (!_dayRe.test(document.body.innerText)) return; // fast bail-out
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+    var node;
+    while ((node = walker.nextNode())) {
+      var p = node.parentElement;
+      if (!p || p.tagName === 'SCRIPT' || p.tagName === 'STYLE') continue;
+      if (_dayRe.test(node.nodeValue)) {
+        for (var i = 0; i < _days.length; i++) {
+          node.nodeValue = node.nodeValue.replace(_days[i][0], _days[i][1]);
         }
-        _origData.set.call(this, v);
       }
-    });
-  }
-
-  // Intercept Node.prototype.textContent (element-level)
-  var _origTC = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
-  if (_origTC && _origTC.set) {
-    Object.defineProperty(Node.prototype, 'textContent', {
-      get: _origTC.get,
-      set: function(v) {
-        if (typeof v === 'string') {
-          if (_dbgRe.test(v)) console.log('[TA] Node.textContent date:', v);
-          if (_dayRe.test(v)) {
-            for (var i = 0; i < _days.length; i++) v = v.replace(_days[i][0], _days[i][1]);
-          }
-        }
-        _origTC.set.call(this, v);
-      }
-    });
-  }
+    }
+  }, 80);
 })();
 
 // Fullscreen background fix.
