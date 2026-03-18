@@ -489,6 +489,17 @@ if (window.parent !== window) {
       if (node.textContent.indexOf('\u0177') !== -1) {
         node.textContent = node.textContent.replace(/\u0177\s*=/g, 'Proyecci\u00f3n:');
       }
+      // Translate English weekday names to Spanish in tooltips
+      if (/Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday/.test(node.textContent)) {
+        node.textContent = node.textContent
+          .replace(/\bMonday\b/g,    'Lunes')
+          .replace(/\bTuesday\b/g,   'Martes')
+          .replace(/\bWednesday\b/g, 'Mi\u00e9rcoles')
+          .replace(/\bThursday\b/g,  'Jueves')
+          .replace(/\bFriday\b/g,    'Viernes')
+          .replace(/\bSaturday\b/g,  'S\u00e1bado')
+          .replace(/\bSunday\b/g,    'Domingo');
+      }
     }
   }
 
