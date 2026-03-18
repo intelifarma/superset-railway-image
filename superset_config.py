@@ -511,21 +511,29 @@ if (window.parent !== window) {
     }
   }
 
+  var _translating = false;
   var observer = new MutationObserver(function(mutations) {
+    if (_translating) return;
+    _translating = true;
     mutations.forEach(function(mutation) {
-      mutation.addedNodes.forEach(function(node) {
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          translateTree(node);
-        } else {
-          translateNode(node);
-        }
-      });
+      if (mutation.type === 'characterData') {
+        translateNode(mutation.target);
+      } else {
+        mutation.addedNodes.forEach(function(node) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            translateTree(node);
+          } else {
+            translateNode(node);
+          }
+        });
+      }
     });
+    _translating = false;
   });
 
   document.addEventListener('DOMContentLoaded', function() {
     translateTree(document.body);
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
   });
 })();
 
