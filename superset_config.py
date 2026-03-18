@@ -511,29 +511,51 @@ if (window.parent !== window) {
     }
   }
 
-  var _translating = false;
   var observer = new MutationObserver(function(mutations) {
-    if (_translating) return;
-    _translating = true;
     mutations.forEach(function(mutation) {
-      if (mutation.type === 'characterData') {
-        translateNode(mutation.target);
-      } else {
-        mutation.addedNodes.forEach(function(node) {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            translateTree(node);
-          } else {
-            translateNode(node);
-          }
-        });
-      }
+      mutation.addedNodes.forEach(function(node) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          translateTree(node);
+        } else {
+          translateNode(node);
+        }
+      });
     });
-    _translating = false;
+  });
+
+  // For ECharts tooltips: poll only the tooltip div (lightweight, not whole-doc characterData)
+  var _tooltipObserver = null;
+  function watchEchartsTooltip(tooltipEl) {
+    if (_tooltipObserver) return;
+    _tooltipObserver = new MutationObserver(function() {
+      translateTree(tooltipEl);
+    });
+    _tooltipObserver.observe(tooltipEl, { childList: true, subtree: true, characterData: true });
+  }
+
+  // Detect when ECharts tooltip is added to DOM, then attach targeted observer
+  var _tooltipWatcher = new MutationObserver(function(mutations) {
+    mutations.forEach(function(mutation) {
+      mutation.addedNodes.forEach(function(node) {
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+        var style = node.getAttribute && node.getAttribute('style') || '';
+        // ECharts tooltip: position absolute/fixed, z-index high, small width
+        if ((node.tagName === 'DIV') && style.indexOf('z-index') !== -1 &&
+            style.indexOf('position') !== -1 && !node.id) {
+          watchEchartsTooltip(node);
+        }
+        // Also search inside added subtree
+        node.querySelectorAll && node.querySelectorAll('div[style*="z-index"]').forEach(function(el) {
+          if (!el.id) watchEchartsTooltip(el);
+        });
+      });
+    });
   });
 
   document.addEventListener('DOMContentLoaded', function() {
     translateTree(document.body);
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    observer.observe(document.body, { childList: true, subtree: true });
+    _tooltipWatcher.observe(document.body, { childList: true, subtree: true });
   });
 })();
 
