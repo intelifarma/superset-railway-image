@@ -528,6 +528,20 @@ if (window.parent !== window) {
     observer.observe(document.body, { childList: true, subtree: true });
   });
 
+  // DIAGNOSTIC: log tooltip structure on mousemove
+  document.addEventListener('mousemove', function() {
+    var all = document.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      var txt = el.textContent || '';
+      if (/Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday/.test(txt) && el.children.length < 5) {
+        console.log('TOOLTIP FOUND:', el.tagName, el.className, el.getAttribute('style'), '|', txt.substring(0, 80));
+        console.log('OUTER HTML:', el.outerHTML.substring(0, 300));
+        break;
+      }
+    }
+  });
+
   // Intercept innerHTML setter to translate weekday names at the source.
   // ECharts sets tooltip content via innerHTML — this catches it regardless of DOM structure.
   var _days = [
