@@ -566,7 +566,23 @@ if (window.parent !== window) {
     return _origIAH.call(this, pos, _translateHtml(v));
   };
 
-  // Intercept textContent setter (catches plain-text tooltip cells)
+  // Intercept CharacterData.prototype.data — the lowest-level setter for text node content.
+  // node.nodeValue / node.textContent / node.data on text nodes all route through here.
+  // This catches the ECharts tooltip date title regardless of which property ECharts uses.
+  var _origData = Object.getOwnPropertyDescriptor(CharacterData.prototype, 'data');
+  if (_origData && _origData.set) {
+    Object.defineProperty(CharacterData.prototype, 'data', {
+      get: _origData.get,
+      set: function(v) {
+        if (typeof v === 'string' && _dayRe.test(v)) {
+          for (var i = 0; i < _days.length; i++) v = v.replace(_days[i][0], _days[i][1]);
+        }
+        _origData.set.call(this, v);
+      }
+    });
+  }
+
+  // Also intercept Node.prototype.textContent (element-level, e.g. element.textContent = '...')
   var _origTC = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
   if (_origTC && _origTC.set) {
     Object.defineProperty(Node.prototype, 'textContent', {
