@@ -528,23 +528,34 @@ if (window.parent !== window) {
     observer.observe(document.body, { childList: true, subtree: true });
   });
 
-  // ECharts tooltips update their innerHTML repeatedly — MutationObserver misses most updates.
-  // Simple poll every 200ms: find any visible tooltip and translate it.
-  var _lastTooltipText = '';
-  setInterval(function() {
-    // ECharts tooltip: absolutely positioned div without an id, visible on screen
-    var candidates = document.querySelectorAll('div[style*="position: absolute"][style*="z-index"]:not([id])');
-    for (var i = 0; i < candidates.length; i++) {
-      var el = candidates[i];
-      var txt = el.textContent || '';
-      if (!txt || el.style.display === 'none' || el.style.visibility === 'hidden') continue;
-      if (!/Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday/.test(txt)) continue;
-      if (txt === _lastTooltipText) continue; // already translated this content
-      _lastTooltipText = txt;
-      translateTree(el);
-      break;
+  // Intercept innerHTML setter to translate weekday names at the source.
+  // ECharts sets tooltip content via innerHTML — this catches it regardless of DOM structure.
+  var _days = [
+    [/\bMonday\b/g,    'Lunes'],
+    [/\bTuesday\b/g,   'Martes'],
+    [/\bWednesday\b/g, 'Mi\u00e9rcoles'],
+    [/\bThursday\b/g,  'Jueves'],
+    [/\bFriday\b/g,    'Viernes'],
+    [/\bSaturday\b/g,  'S\u00e1bado'],
+    [/\bSunday\b/g,    'Domingo']
+  ];
+  var _dayRe = /Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday/;
+  var _yhatRe = /\u0177\s*=/g;
+  var _origIH = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+  Object.defineProperty(Element.prototype, 'innerHTML', {
+    get: _origIH.get,
+    set: function(v) {
+      if (typeof v === 'string') {
+        if (_dayRe.test(v)) {
+          for (var i = 0; i < _days.length; i++) v = v.replace(_days[i][0], _days[i][1]);
+        }
+        if (v.indexOf('\u0177') !== -1) {
+          v = v.replace(_yhatRe, 'Proyecci\u00f3n:');
+        }
+      }
+      _origIH.set.call(this, v);
     }
-  }, 200);
+  });
 })();
 
 // Fullscreen background fix.
