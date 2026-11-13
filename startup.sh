@@ -37,10 +37,17 @@ Init Step ${1}/${STEP_CNT} [${2}] -- ${3}
 
 EOF
 }
-ADMIN_PASSWORD="admin"
-# If Cypress run – overwrite the password for admin and export env variables
+if [ -z "${SUPERSET_SECRET_KEY:-}" ] || [ "${SUPERSET_SECRET_KEY}" = "CHANGE_ME" ]; then
+    echo "SUPERSET_SECRET_KEY must be set to a unique value in the platform environment." >&2
+    exit 1
+fi
+if [ -z "${SUPERSET_ADMIN_PASSWORD:-}" ] || [ -z "${SUPERSET_ADMIN_EMAIL:-}" ]; then
+    echo "SUPERSET_ADMIN_EMAIL and SUPERSET_ADMIN_PASSWORD must be set in the platform environment." >&2
+    exit 1
+fi
+ADMIN_PASSWORD="${SUPERSET_ADMIN_PASSWORD}"
+# If Cypress run – export env variables for the test configuration
 if [ "$CYPRESS_CONFIG" == "true" ]; then
-    ADMIN_PASSWORD="general"
     export SUPERSET_CONFIG=tests.integration_tests.superset_test_config
     export SUPERSET_TESTENV=true
     export SUPERSET__SQLALCHEMY_DATABASE_URI=postgresql+psycopg2://superset:superset@db:5432/superset
@@ -51,12 +58,12 @@ superset db upgrade
 echo_step "1" "Complete" "Applying DB migrations"
 
 # Create an admin user
-echo_step "2" "Starting" "Setting up admin user ( admin / $ADMIN_PASSWORD )"
+echo_step "2" "Starting" "Setting up admin user (admin)"
 superset fab create-admin \
               --username admin \
               --firstname Superset \
               --lastname Admin \
-              --email admin@superset.com \
+              --email "${SUPERSET_ADMIN_EMAIL}" \
               --password $ADMIN_PASSWORD
 echo_step "2" "Complete" "Setting up admin user"
 # Create default roles and permissions
@@ -78,4 +85,4 @@ if [ "$SUPERSET_LOAD_EXAMPLES" = "yes" ]; then
 fi
 
 echo "Starting web app..."
-/usr/bin/run-server.sh
+/app/docker/entrypoints/run-server.sh
