@@ -4,7 +4,8 @@ from flask import Flask, request as flask_request, redirect
 
 logger = logging.getLogger()
 
-SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI", "sqlite:////app/superset.db")
+# Railway's PostgreSQL plugin exposes DATABASE_URL; it is the metadata database.
+SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI") or os.environ["DATABASE_URL"]
 
 RATELIMIT_STORAGE_URI = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
