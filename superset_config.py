@@ -8,6 +8,26 @@ SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI", "sqlite:////
 
 RATELIMIT_STORAGE_URI = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
+# Railway terminates TLS and forwards requests; without this the rate limit
+# counts every user as the proxy's address.
+ENABLE_PROXY_FIX = True
+
+
+class _SkipGuestSessionWarning(logging.Filter):
+    # Superset 6.1.0 logs this warning for every guest-token request (embedded
+    # dashboards). Guest users are never mapped to a DB session, so it is expected;
+    # upstream master already downgrades it to debug. Only this exact text is dropped.
+
+    def filter(self, record):
+        return not (
+            record.levelno == logging.WARNING
+            and record.msg == "Failed to add user to db session: %s"
+            and "is not mapped" in str(record.args[0] if record.args else "")
+        )
+
+
+logger.addFilter(_SkipGuestSessionWarning())
+
 CACHE_CONFIG = {
     "CACHE_TYPE": "RedisCache",
     "CACHE_DEFAULT_TIMEOUT": 300,
